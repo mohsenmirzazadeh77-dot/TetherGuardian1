@@ -2,8 +2,10 @@ package com.tetherguardian.app.data
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
@@ -30,10 +32,11 @@ class NobitexWebSocket(
     private var manuallyStopped = false
 
     fun connect() {
+
         manuallyStopped = false
 
         val request = Request.Builder()
-            .url("wss://ws.nobitex.ir/connection/websocket")
+            .url("wss://wss.nobitex.ir/connection/websocket")
             .build()
 
         webSocket = client.newWebSocket(
@@ -43,67 +46,148 @@ class NobitexWebSocket(
     }
 
     fun disconnect() {
+
         manuallyStopped = true
-        webSocket?.close(1000, "Stopped by user")
+
+        webSocket?.close(
+            1000,
+            "Stopped by user"
+        )
+
         webSocket = null
+
         onConnectionChanged(false)
     }
 
-    private fun subscribe(webSocket: WebSocket) {
+    private fun sendConnectMessage(webSocket: WebSocket) {
 
         val message = """
             {
-              "method": "subscribe",
-              "params": {
-                "channel": "public:orderbook-USDTIRT"
-              }
+                "connect": {},
+                "id": 1
             }
         """.trimIndent()
 
         webSocket.send(message)
     }
 
+    private fun subscribeToOrderBook(webSocket: WebSocket) {
+
+        val message = """
+            {
+                "id": 2,
+                "subscribe": {
+                    "channel": "public:orderbook-USDTIRT"
+                }
+            }
+        """.trimIndent()
+
+        webSocket.send(message)
+    }
+
+    private fun handleMessage(text: String) {
+
+        try {
+
+            val root =
+                json.parseToJsonElement(text).jsonObject
+
+            /*
+             * پاسخ‌های push نوبیتکس:
+             *
+             * {
+             *   "push": {
+             *     "channel": "...",
+             *     "pub": {
+             *       "data": "{...}"
+             *     }
+             *   }
+             * }
+             */
+
+            val push =
+                root["push"]?.jsonObject
+                    ?: return
+
+            val pub =
+                push["pub"]?.jsonObject
+                    ?: return
+
+            val dataText =
+                pub["data"]?.jsonPrimitive?.content
+                    ?: return
+
+            val data =
+                json.parseToJsonElement(dataText).jsonObject
+
+            val lastTradePrice =
+                data["lastTradePrice"]
+                    ?.jsonPrimitive
+                    ?.content
+
+            if (!lastTradePrice.isNullOrBlank()) {
+
+                onPriceUpdate(lastTradePrice)
+            }
+
+        } catch (e: Exception) {
+
+            onError(
+                "خطا در پردازش داده نوبیتکس: " +
+                        "${e.message ?: "نامشخص"}"
+            )
+        }
+    }
+
     private inner class Listener : WebSocketListener() {
 
         override fun onOpen(
             webSocket: WebSocket,
-            response: okhttp3.Response
+            response: Response
         ) {
+
             onConnectionChanged(true)
-            subscribe(webSocket)
+
+            /*
+             * مرحله اول:
+             * برقراری اتصال Centrifugo
+             */
+            sendConnectMessage(webSocket)
         }
 
         override fun onMessage(
             webSocket: WebSocket,
             text: String
         ) {
+
+            /*
+             * اگر پاسخ مربوط به اتصال باشد،
+             * بعد از آن subscription انجام می‌شود.
+             */
             try {
-                val root = json.parseToJsonElement(text).jsonObject
 
-                val data = root["data"]
-                    ?.jsonObject
+                val root =
+                    json.parseToJsonElement(text).jsonObject
 
-                val lastTradePrice = data
-                    ?.get("lastTradePrice")
-                    ?.toString()
-                    ?.trim('"')
+                if (root.containsKey("connect")) {
 
-                if (!lastTradePrice.isNullOrBlank()) {
-                    onPriceUpdate(lastTradePrice)
+                    subscribeToOrderBook(webSocket)
+
+                    return
                 }
 
-            } catch (e: Exception) {
-                onError(
-                    "خطا در پردازش داده نوبیتکس: ${e.message}"
-                )
+            } catch (_: Exception) {
+                // پیام ممکن است داده بازار باشد.
             }
+
+            handleMessage(text)
         }
 
         override fun onMessage(
             webSocket: WebSocket,
             bytes: ByteString
         ) {
-            // پیام‌های باینری فعلاً استفاده نمی‌شوند.
+            // فعلاً پیام باینری استفاده نمی‌شود.
         }
 
         override fun onClosing(
@@ -111,6 +195,7 @@ class NobitexWebSocket(
             code: Int,
             reason: String
         ) {
+
             onConnectionChanged(false)
         }
 
@@ -119,18 +204,21 @@ class NobitexWebSocket(
             code: Int,
             reason: String
         ) {
+
             onConnectionChanged(false)
         }
 
         override fun onFailure(
             webSocket: WebSocket,
             t: Throwable,
-            response: okhttp3.Response?
+            response: Response?
         ) {
+
             onConnectionChanged(false)
 
             onError(
-                "ارتباط با نوبیتکس قطع شد: ${t.message ?: "خطای نامشخص"}"
+                "ارتباط با نوبیتکس قطع شد: " +
+                        "${t.message ?: "خطای نامشخص"}"
             )
         }
     }
