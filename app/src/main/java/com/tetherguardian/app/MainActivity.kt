@@ -1,6 +1,8 @@
 package com.tetherguardian.app
 
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
@@ -8,8 +10,9 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.tetherguardian.app.data.NobitexApi
-import com.tetherguardian.app.data.NobitexWebSocket
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DecimalFormat
@@ -29,12 +32,11 @@ class MainActivity : AppCompatActivity() {
 
     private val nobitexApi = NobitexApi()
 
-    private lateinit var nobitexWebSocket: NobitexWebSocket
-
     private var currentOpen: Double? = null
     private var currentPrice: Double? = null
 
-    private val decimalFormat = DecimalFormat("#,##0.########")
+    private val decimalFormat =
+        DecimalFormat("#,##0.########")
 
     private val timeframes = listOf(
         Timeframe("۴ ساعت", "240"),
@@ -50,24 +52,37 @@ class MainActivity : AppCompatActivity() {
 
         initializeViews()
         setupTimeframeSpinner()
-        setupWebSocket()
 
-        refreshOpenPrice()
+        refreshButton.setOnClickListener {
+            loadMarketData()
+        }
+
+        loadMarketData()
+        startPriceUpdater()
     }
 
     private fun initializeViews() {
 
-        connectionText = findViewById(R.id.connectionText)
-        openText = findViewById(R.id.openText)
-        priceText = findViewById(R.id.priceText)
-        changeText = findViewById(R.id.changeText)
-        updateText = findViewById(R.id.updateText)
-        timeframeSpinner = findViewById(R.id.timeframeSpinner)
-        refreshButton = findViewById(R.id.refreshButton)
+        connectionText =
+            findViewById(R.id.connectionText)
 
-        refreshButton.setOnClickListener {
-            refreshOpenPrice()
-        }
+        openText =
+            findViewById(R.id.openText)
+
+        priceText =
+            findViewById(R.id.priceText)
+
+        changeText =
+            findViewById(R.id.changeText)
+
+        updateText =
+            findViewById(R.id.updateText)
+
+        timeframeSpinner =
+            findViewById(R.id.timeframeSpinner)
+
+        refreshButton =
+            findViewById(R.id.refreshButton)
     }
 
     private fun setupTimeframeSpinner() {
@@ -87,123 +102,148 @@ class MainActivity : AppCompatActivity() {
         timeframeSpinner.setSelection(0)
 
         timeframeSpinner.onItemSelectedListener =
-            object : android.widget.AdapterView.OnItemSelectedListener {
+            object : AdapterView.OnItemSelectedListener {
 
                 override fun onItemSelected(
-                    parent: android.widget.AdapterView<*>?,
-                    view: android.view.View?,
+                    parent: AdapterView<*>?,
+                    view: View?,
                     position: Int,
                     id: Long
                 ) {
-                    refreshOpenPrice()
+
+                    loadMarketData()
                 }
 
                 override fun onNothingSelected(
-                    parent: android.widget.AdapterView<*>?
+                    parent: AdapterView<*>?
                 ) {
                 }
             }
     }
 
-    private fun setupWebSocket() {
-
-        nobitexWebSocket = NobitexWebSocket(
-
-            onPriceUpdate = { price ->
-
-                runOnUiThread {
-
-                    currentPrice = price.toDoubleOrNull()
-
-                    priceText.text =
-                        formatPrice(price)
-
-                    updateChange()
-
-                    updateText.text =
-                        "آخرین دریافت: ${currentTime()}"
-                }
-            },
-
-            onConnectionChanged = { connected ->
-
-                runOnUiThread {
-
-                    if (connected) {
-
-                        connectionText.text =
-                            "● متصل به نوبیتکس"
-
-                    } else {
-
-                        connectionText.text =
-                            "● اتصال قطع است"
-                    }
-                }
-            },
-
-            onError = { error ->
-
-                runOnUiThread {
-
-                    connectionText.text =
-                        error
-                }
-            }
-        )
-
-        nobitexWebSocket.connect()
-    }
-
-    private fun refreshOpenPrice() {
+    private fun loadMarketData() {
 
         val selected =
             timeframes.getOrNull(
                 timeframeSpinner.selectedItemPosition
             ) ?: return
 
-        openText.text = "در حال دریافت..."
+        connectionText.text =
+            "● در حال دریافت اطلاعات..."
 
         lifecycleScope.launch {
 
             try {
 
-                val candle = withContext(Dispatchers.IO) {
+                val result =
+                    withContext(Dispatchers.IO) {
 
-                    nobitexApi
-                        .getOhlc(
-                            symbol = "USDTIRT",
-                            timeframe = selected.resolution
+                        val candles =
+                            nobitexApi.getOhlc(
+                                symbol = "USDTIRT",
+                                timeframe = selected.resolution
+                            )
+
+                        val currentPrice =
+                            nobitexApi.getCurrentPrice(
+                                symbol = "USDTIRT"
+                            )
+
+                        Pair(
+                            candles.lastOrNull(),
+                            currentPrice
                         )
-                        .lastOrNull()
-                }
+                    }
+
+                val candle = result.first
+                val price = result.second
 
                 if (candle == null) {
 
-                    openText.text =
-                        "داده‌ای دریافت نشد"
+                    connectionText.text =
+                        "● کندل دریافت نشد"
 
+                    openText.text = "--"
                     return@launch
                 }
 
                 currentOpen =
                     candle.open.toDoubleOrNull()
 
+                currentPrice =
+                    price.toDoubleOrNull()
+
                 openText.text =
                     formatPrice(candle.open)
 
+                priceText.text =
+                    formatPrice(price)
+
                 updateChange()
 
+                connectionText.text =
+                    "● متصل به نوبیتکس"
+
                 updateText.text =
-                    "Open کندل به‌روزرسانی شد • ${currentTime()}"
+                    "آخرین دریافت: ${currentTime()}"
 
             } catch (e: Exception) {
 
-                openText.text =
-                    "خطا در دریافت Open"
+                connectionText.text =
+                    "● خطا در ارتباط با نوبیتکس"
+
+                updateText.text =
+                    e.message ?: "خطای نامشخص"
+
+            }
+        }
+    }
+
+    private fun startPriceUpdater() {
+
+        lifecycleScope.launch {
+
+            while (isActive) {
+
+                delay(10_000)
+
+                updateCurrentPrice()
+            }
+        }
+    }
+
+    private fun updateCurrentPrice() {
+
+        lifecycleScope.launch {
+
+            try {
+
+                val price =
+                    withContext(Dispatchers.IO) {
+
+                        nobitexApi.getCurrentPrice(
+                            symbol = "USDTIRT"
+                        )
+                    }
+
+                currentPrice =
+                    price.toDoubleOrNull()
+
+                priceText.text =
+                    formatPrice(price)
+
+                updateChange()
 
                 connectionText.text =
-                    "خطا: ${e.message ?: "نامشخص"}"
+                    "● متصل به نوبیتکس"
+
+                updateText.text =
+                    "آخرین قیمت: ${currentTime()}"
+
+            } catch (e: Exception) {
+
+                connectionText.text =
+                    "● ارتباط موقتاً قطع است"
             }
         }
     }
@@ -213,8 +253,14 @@ class MainActivity : AppCompatActivity() {
         val open = currentOpen
         val price = currentPrice
 
-        if (open == null || price == null || open == 0.0) {
+        if (
+            open == null ||
+            price == null ||
+            open == 0.0
+        ) {
+
             changeText.text = "--"
+
             return
         }
 
@@ -229,13 +275,16 @@ class MainActivity : AppCompatActivity() {
             )
     }
 
-    private fun formatPrice(value: String): String {
+    private fun formatPrice(
+        value: String
+    ): String {
 
         val number =
             value.toDoubleOrNull()
                 ?: return value
 
-        return decimalFormat.format(number) + " تومان"
+        return decimalFormat.format(number) +
+                " تومان"
     }
 
     private fun currentTime(): String {
@@ -244,15 +293,6 @@ class MainActivity : AppCompatActivity() {
             "HH:mm:ss",
             Locale.getDefault()
         ).format(Date())
-    }
-
-    override fun onDestroy() {
-
-        if (::nobitexWebSocket.isInitialized) {
-            nobitexWebSocket.disconnect()
-        }
-
-        super.onDestroy()
     }
 
     private data class Timeframe(
