@@ -1,6 +1,8 @@
 package com.tetherguardian.app.data
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -15,7 +17,7 @@ class NobitexApi {
     }
 
     /**
-     * دریافت کندل‌های OHLC از API عمومی نوبیتکس.
+     * دریافت کندل‌های OHLC از API عمومی نوبیتکس
      *
      * timeframe:
      * 240 = چهار ساعت
@@ -51,10 +53,9 @@ class NobitexApi {
             val body = response.body?.string()
                 ?: throw IOException("Empty Nobitex response")
 
-            val parsed = json.parseToJsonElement(body)
+            val parsed = json.parseToJsonElement(body).jsonObject
 
-            val status = parsed
-                .jsonObject["s"]
+            val status = parsed["s"]
                 ?.toString()
                 ?.trim('"')
 
@@ -64,50 +65,42 @@ class NobitexApi {
                 )
             }
 
-            val obj = parsed.jsonObject
-
-            val timestamps = obj["t"]
-                ?.jsonArray
+            val timestamps = parsed["t"]?.jsonArray
                 ?: throw IOException("Missing timestamp data")
 
-            val opens = obj["o"]
-                ?.jsonArray
+            val opens = parsed["o"]?.jsonArray
                 ?: throw IOException("Missing open data")
 
-            val highs = obj["h"]
-                ?.jsonArray
+            val highs = parsed["h"]?.jsonArray
                 ?: throw IOException("Missing high data")
 
-            val lows = obj["l"]
-                ?.jsonArray
+            val lows = parsed["l"]?.jsonArray
                 ?: throw IOException("Missing low data")
 
-            val closes = obj["c"]
-                ?.jsonArray
+            val closes = parsed["c"]?.jsonArray
                 ?: throw IOException("Missing close data")
 
-            val volumes = obj["v"]
-                ?.jsonArray
+            val volumes = parsed["v"]?.jsonArray
                 ?: throw IOException("Missing volume data")
 
-            val count = listOf(
+            val count = minOf(
                 timestamps.size,
                 opens.size,
                 highs.size,
                 lows.size,
                 closes.size,
                 volumes.size
-            ).minOrNull() ?: 0
+            )
 
-            return (0 until count).map { i ->
+            return (0 until count).map { index ->
 
                 Candle(
-                    timestamp = timestamps[i].toString().toLong(),
-                    open = opens[i].toString(),
-                    high = highs[i].toString(),
-                    low = lows[i].toString(),
-                    close = closes[i].toString(),
-                    volume = volumes[i].toString()
+                    timestamp = timestamps[index].toString().toLong(),
+                    open = opens[index].toString(),
+                    high = highs[index].toString(),
+                    low = lows[index].toString(),
+                    close = closes[index].toString(),
+                    volume = volumes[index].toString()
                 )
             }
         }
