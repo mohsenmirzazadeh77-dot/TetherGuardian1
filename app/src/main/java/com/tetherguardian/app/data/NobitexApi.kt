@@ -3,6 +3,7 @@ package com.tetherguardian.app.data
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -17,9 +18,8 @@ class NobitexApi {
     }
 
     /**
-     * دریافت کندل‌های OHLC از API عمومی نوبیتکس
+     * دریافت کندل‌های OHLC
      *
-     * timeframe:
      * 240 = چهار ساعت
      * 360 = شش ساعت
      * 720 = دوازده ساعت
@@ -30,12 +30,14 @@ class NobitexApi {
         timeframe: String
     ): List<Candle> {
 
+        val now = System.currentTimeMillis() / 1000
+
         val url =
             "https://api.nobitex.ir/market/udf/history" +
                     "?symbol=$symbol" +
                     "&resolution=$timeframe" +
                     "&from=0" +
-                    "&to=${System.currentTimeMillis() / 1000}"
+                    "&to=$now"
 
         val request = Request.Builder()
             .url(url)
@@ -46,42 +48,64 @@ class NobitexApi {
 
             if (!response.isSuccessful) {
                 throw IOException(
-                    "Nobitex HTTP error: ${response.code}"
+                    "خطای HTTP نوبیتکس: ${response.code}"
                 )
             }
 
             val body = response.body?.string()
-                ?: throw IOException("Empty Nobitex response")
+                ?: throw IOException(
+                    "پاسخ نوبیتکس خالی است"
+                )
 
-            val parsed = json.parseToJsonElement(body).jsonObject
+            val root =
+                json.parseToJsonElement(body).jsonObject
 
-            val status = parsed["s"]
-                ?.toString()
-                ?.trim('"')
+            val status =
+                root["s"]
+                    ?.jsonPrimitive
+                    ?.content
 
             if (status != "ok") {
                 throw IOException(
-                    "Nobitex API status: $status"
+                    "وضعیت OHLC نوبیتکس: $status"
                 )
             }
 
-            val timestamps = parsed["t"]?.jsonArray
-                ?: throw IOException("Missing timestamp data")
+            val timestamps =
+                root["t"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات زمان کندل دریافت نشد"
+                    )
 
-            val opens = parsed["o"]?.jsonArray
-                ?: throw IOException("Missing open data")
+            val opens =
+                root["o"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات Open دریافت نشد"
+                    )
 
-            val highs = parsed["h"]?.jsonArray
-                ?: throw IOException("Missing high data")
+            val highs =
+                root["h"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات High دریافت نشد"
+                    )
 
-            val lows = parsed["l"]?.jsonArray
-                ?: throw IOException("Missing low data")
+            val lows =
+                root["l"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات Low دریافت نشد"
+                    )
 
-            val closes = parsed["c"]?.jsonArray
-                ?: throw IOException("Missing close data")
+            val closes =
+                root["c"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات Close دریافت نشد"
+                    )
 
-            val volumes = parsed["v"]?.jsonArray
-                ?: throw IOException("Missing volume data")
+            val volumes =
+                root["v"]?.jsonArray
+                    ?: throw IOException(
+                        "اطلاعات Volume دریافت نشد"
+                    )
 
             val count = minOf(
                 timestamps.size,
@@ -95,14 +119,90 @@ class NobitexApi {
             return (0 until count).map { index ->
 
                 Candle(
-                    timestamp = timestamps[index].toString().toLong(),
-                    open = opens[index].toString(),
-                    high = highs[index].toString(),
-                    low = lows[index].toString(),
-                    close = closes[index].toString(),
-                    volume = volumes[index].toString()
+                    timestamp =
+                        timestamps[index]
+                            .jsonPrimitive
+                            .content
+                            .toLong(),
+
+                    open =
+                        opens[index]
+                            .jsonPrimitive
+                            .content,
+
+                    high =
+                        highs[index]
+                            .jsonPrimitive
+                            .content,
+
+                    low =
+                        lows[index]
+                            .jsonPrimitive
+                            .content,
+
+                    close =
+                        closes[index]
+                            .jsonPrimitive
+                            .content,
+
+                    volume =
+                        volumes[index]
+                            .jsonPrimitive
+                            .content
                 )
             }
+        }
+    }
+
+    /**
+     * دریافت آخرین قیمت معامله
+     * از API عمومی Order Book نوبیتکس
+     */
+    fun getCurrentPrice(
+        symbol: String = "USDTIRT"
+    ): String {
+
+        val url =
+            "https://api.nobitex.ir/v3/orderbook/$symbol"
+
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+
+            if (!response.isSuccessful) {
+                throw IOException(
+                    "خطای HTTP قیمت لحظه‌ای: ${response.code}"
+                )
+            }
+
+            val body = response.body?.string()
+                ?: throw IOException(
+                    "پاسخ قیمت لحظه‌ای خالی است"
+                )
+
+            val root =
+                json.parseToJsonElement(body).jsonObject
+
+            val status =
+                root["status"]
+                    ?.jsonPrimitive
+                    ?.content
+
+            if (status != "ok") {
+                throw IOException(
+                    "وضعیت قیمت نوبیتکس: $status"
+                )
+            }
+
+            return root["lastTradePrice"]
+                ?.jsonPrimitive
+                ?.content
+                ?: throw IOException(
+                    "lastTradePrice در پاسخ نوبیتکس وجود ندارد"
+                )
         }
     }
 }
