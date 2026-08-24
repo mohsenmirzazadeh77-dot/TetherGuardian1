@@ -29,6 +29,7 @@ class MonitoringService : Service() {
         const val ALERT_NOTIFICATION_ID = 2001
         const val ACTION_START = "com.tetherguardian.app.action.START_MONITORING"
         const val ACTION_STOP = "com.tetherguardian.app.action.STOP_MONITORING"
+        const val ACTION_REFRESH_ALERT_CHANNEL = "com.tetherguardian.app.action.REFRESH_ALERT_CHANNEL"
         const val ACTION_PRICE_UPDATE = "com.tetherguardian.app.action.PRICE_UPDATE"
         const val ACTION_ALERT_ACKNOWLEDGED = "com.tetherguardian.app.action.ALERT_ACKNOWLEDGED"
         const val EXTRA_PRICE = "extra_price"
@@ -68,6 +69,9 @@ class MonitoringService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_REFRESH_ALERT_CHANNEL -> {
+                recreateAlertChannel()
+            }
             ACTION_ALERT_ACKNOWLEDGED -> {
                 acknowledgeAlert()
             }
@@ -86,7 +90,6 @@ class MonitoringService : Service() {
 
     private fun startPriceLoop() {
         if (monitoringJob?.isActive == true) return
-
         monitoringJob = serviceScope.launch {
             while (isActive) {
                 fetchAndProcessPrice()
@@ -101,104 +104,67 @@ class MonitoringService : Service() {
             val numericPrice = price.toDoubleOrNull() ?: return
             val now = System.currentTimeMillis()
             val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-
             val oldBase = prefs.getString(KEY_BASE_PRICE, null)?.toDoubleOrNull()
             var basePrice = oldBase
             var baseTime = prefs.getLong(KEY_BASE_TIME, 0L)
             var alertTriggered = false
-            var alertDrop = 0.0
 
             if (oldBase == null || numericPrice > oldBase) {
                 basePrice = numericPrice
                 baseTime = now
-                prefs.edit()
-                    .putString(KEY_BASE_PRICE, numericPrice.toString())
-                    .putLong(KEY_BASE_TIME, baseTime)
-                    .apply()
+                prefs.edit().putString(KEY_BASE_PRICE, numericPrice.toString()).putLong(KEY_BASE_TIME, baseTime).apply()
             } else {
                 val dropPercent = prefs.getString(KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
                 val dropLimit = basePrice * (1.0 - dropPercent / 100.0)
-
                 if (numericPrice <= dropLimit) {
                     val previousBase = basePrice
-                    alertDrop = if (previousBase > 0.0) {
-                        ((numericPrice - previousBase) / previousBase) * 100.0
-                    } else 0.0
-
-                    // Immediately establish the first real price at/below the limit as the new base.
+                    val drop = if (previousBase > 0.0) ((numericPrice - previousBase) / previousBase) * 100.0 else 0.0
                     basePrice = numericPrice
                     baseTime = now
                     alertTriggered = true
-
-                    prefs.edit()
-                        .putString(KEY_BASE_PRICE, numericPrice.toString())
-                        .putLong(KEY_BASE_TIME, baseTime)
-                        .apply()
-
-                    startAlertCycle(
-                        alertPrice = numericPrice,
-                        newBase = numericPrice,
-                        drop = alertDrop
-                    )
+                    prefs.edit().putString(KEY_BASE_PRICE, numericPrice.toString()).putLong(KEY_BASE_TIME, baseTime).apply()
+                    startAlertCycle(numericPrice, numericPrice, drop)
                 }
             }
 
             val dropPercent = prefs.getString(KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
-            val currentDropLimit = basePrice?.let {
-                it * (1.0 - dropPercent / 100.0)
-            } ?: 0.0
-
-            sendBroadcast(
-                Intent(ACTION_PRICE_UPDATE).apply {
-                    setPackage(packageName)
-                    putExtra(EXTRA_PRICE, numericPrice)
-                    putExtra(EXTRA_TIME, now)
-                    putExtra(EXTRA_BASE_PRICE, basePrice ?: numericPrice)
-                    putExtra(EXTRA_BASE_TIME, baseTime)
-                    putExtra(EXTRA_DROP_LIMIT, currentDropLimit)
-                    putExtra(EXTRA_ALERT_TRIGGERED, alertTriggered)
-                }
-            )
+            val currentDropLimit = basePrice?.let { it * (1.0 - dropPercent / 100.0) } ?: 0.0
+            sendBroadcast(Intent(ACTION_PRICE_UPDATE).apply {
+                setPackage(packageName)
+                putExtra(EXTRA_PRICE, numericPrice)
+                putExtra(EXTRA_TIME, now)
+                putExtra(EXTRA_BASE_PRICE, basePrice ?: numericPrice)
+                putExtra(EXTRA_BASE_TIME, baseTime)
+                putExtra(EXTRA_DROP_LIMIT, currentDropLimit)
+                putExtra(EXTRA_ALERT_TRIGGERED, alertTriggered)
+            })
         } catch (_: Exception) {
             // Retry on the next 10-second cycle.
         }
     }
 
     private fun startAlertCycle(alertPrice: Double, newBase: Double, drop: Double) {
-        // One visual/audio alert cycle at a time. Price calculation never stops.
         if (alertCycleJob?.isActive == true) return
-
         alertAcknowledged = false
         alertCycleJob = serviceScope.launch {
             while (isActive && !alertAcknowledged) {
                 showAlert(alertPrice, newBase, drop)
                 delay(30_000)
                 if (alertAcknowledged) break
-
                 dismissAlertSurface()
                 delay(15_000)
-                if (alertAcknowledged) break
             }
         }
     }
 
     private fun showAlert(alertPrice: Double, newBase: Double, drop: Double) {
         val activityIntent = Intent(this, AlertActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_ALERT_PRICE, alertPrice)
             putExtra(EXTRA_ALERT_BASE, newBase)
             putExtra(EXTRA_ALERT_DROP, drop)
         }
-
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            2100,
-            activityIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
+        val pendingIntent = PendingIntent.getActivity(this, 2100, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("هشدار ریزش تتر")
@@ -209,14 +175,11 @@ class MonitoringService : Service() {
             .setOngoing(true)
             .setFullScreenIntent(pendingIntent, true)
             .build()
-
-        getSystemService(NotificationManager::class.java)
-            .notify(ALERT_NOTIFICATION_ID, notification)
+        getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
     }
 
     private fun dismissAlertSurface() {
-        getSystemService(NotificationManager::class.java)
-            .cancel(ALERT_NOTIFICATION_ID)
+        getSystemService(NotificationManager::class.java).cancel(ALERT_NOTIFICATION_ID)
     }
 
     private fun acknowledgeAlert() {
@@ -227,10 +190,7 @@ class MonitoringService : Service() {
     }
 
     private fun markActive() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_ACTIVE, true)
-            .apply()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
     }
 
     private fun stopMonitoring() {
@@ -240,10 +200,7 @@ class MonitoringService : Service() {
         alertCycleJob = null
         alertAcknowledged = true
         dismissAlertSurface()
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().clear().apply()
     }
 
     private fun buildMonitoringNotification(): Notification {
@@ -259,21 +216,18 @@ class MonitoringService : Service() {
 
     private fun createNotificationChannels() {
         val manager = getSystemService(NotificationManager::class.java)
-
-        val monitoringChannel = NotificationChannel(
-            CHANNEL_ID,
-            "پایش قیمت تتر",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
+        val monitoringChannel = NotificationChannel(CHANNEL_ID, "پایش قیمت تتر", NotificationManager.IMPORTANCE_LOW).apply {
             description = "اعلان دائمی هنگام فعال بودن پایش قیمت تتر"
             setShowBadge(false)
         }
+        manager.createNotificationChannel(monitoringChannel)
+        recreateAlertChannel()
+    }
 
-        val alertChannel = NotificationChannel(
-            ALERT_CHANNEL_ID,
-            "هشدارهای ریزش تتر",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
+    private fun recreateAlertChannel() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.deleteNotificationChannel(ALERT_CHANNEL_ID)
+        val alertChannel = NotificationChannel(ALERT_CHANNEL_ID, "هشدارهای ریزش تتر", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "هشدار صوتی و نمایشی ریزش قیمت تتر"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 700, 300, 700, 300, 900)
@@ -283,14 +237,11 @@ class MonitoringService : Service() {
                 .build())
             lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
         }
-
-        manager.createNotificationChannel(monitoringChannel)
         manager.createNotificationChannel(alertChannel)
     }
 
     private fun selectedSoundUri(): Uri {
-        val index = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getInt(KEY_SOUND_INDEX, 0)
+        val index = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getInt(KEY_SOUND_INDEX, 0)
         return when (index) {
             1 -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             2 -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
