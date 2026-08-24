@@ -27,7 +27,50 @@
             android:text="NOBITEX • LIVE"
             android:textSize="13sp"
             android:gravity="center"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="20dp" />
+
+        <TextView
+            android:id="@+id/monitoringStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="● پایش غیرفعال"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/monitoringButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="فعال کردن برنامه"
+            android:textSize="16sp"
+            android:layout_marginBottom="20dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="قیمت مبنا"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/baseText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textSize="25sp"
+            android:textStyle="bold"
+            android:layout_marginTop="6dp" />
+
+        <TextView
+            android:id="@+id/baseTimeText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="زمان ثبت: --"
+            android:textSize="13sp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="20dp" />
 
         <TextView
             android:id="@+id/connectionText"
