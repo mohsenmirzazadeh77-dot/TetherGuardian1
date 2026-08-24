@@ -18,7 +18,7 @@ class NobitexApi {
     }
 
     /**
-     * دریافت کندل‌های OHLC
+     * دریافت کندل‌های OHLC از نوبیتکس
      *
      * 240 = چهار ساعت
      * 360 = شش ساعت
@@ -33,7 +33,7 @@ class NobitexApi {
         val now = System.currentTimeMillis() / 1000
 
         val url =
-            "https://api.nobitex.ir/market/udf/history" +
+            "https://apiv2.nobitex.ir/market/udf/history" +
                     "?symbol=$symbol" +
                     "&resolution=$timeframe" +
                     "&from=0" +
@@ -48,13 +48,13 @@ class NobitexApi {
 
             if (!response.isSuccessful) {
                 throw IOException(
-                    "خطای HTTP نوبیتکس: ${response.code}"
+                    "خطای HTTP نوبیتکس OHLC: ${response.code}"
                 )
             }
 
             val body = response.body?.string()
                 ?: throw IOException(
-                    "پاسخ نوبیتکس خالی است"
+                    "پاسخ OHLC نوبیتکس خالی است"
                 )
 
             val root =
@@ -155,15 +155,14 @@ class NobitexApi {
     }
 
     /**
-     * دریافت آخرین قیمت معامله
-     * از API عمومی Order Book نوبیتکس
+     * دریافت آخرین قیمت معامله USDT/IRT
      */
     fun getCurrentPrice(
         symbol: String = "USDTIRT"
     ): String {
 
         val url =
-            "https://api.nobitex.ir/v3/orderbook/$symbol"
+            "https://apiv2.nobitex.ir/v3/orderbook/$symbol"
 
         val request = Request.Builder()
             .url(url)
@@ -174,13 +173,13 @@ class NobitexApi {
 
             if (!response.isSuccessful) {
                 throw IOException(
-                    "خطای HTTP قیمت لحظه‌ای: ${response.code}"
+                    "خطای HTTP قیمت لحظه‌ای نوبیتکس: ${response.code}"
                 )
             }
 
             val body = response.body?.string()
                 ?: throw IOException(
-                    "پاسخ قیمت لحظه‌ای خالی است"
+                    "پاسخ قیمت لحظه‌ای نوبیتکس خالی است"
                 )
 
             val root =
