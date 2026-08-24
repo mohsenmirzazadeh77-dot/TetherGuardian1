@@ -67,19 +67,16 @@ class MainActivity : AppCompatActivity() {
     private val priceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != MonitoringService.ACTION_PRICE_UPDATE) return
-
             val price = intent.getDoubleExtra(MonitoringService.EXTRA_PRICE, 0.0)
             val base = intent.getDoubleExtra(MonitoringService.EXTRA_BASE_PRICE, 0.0)
             val baseTime = intent.getLongExtra(MonitoringService.EXTRA_BASE_TIME, 0L)
             val receivedTime = intent.getLongExtra(MonitoringService.EXTRA_TIME, 0L)
             val dropLimit = intent.getDoubleExtra(MonitoringService.EXTRA_DROP_LIMIT, 0.0)
-
             if (price > 0) priceText.text = formatPrice(price)
             if (base > 0) baseText.text = formatPrice(base)
             if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
             if (dropLimit > 0) dropLimitText.text = formatPrice(dropLimit)
             if (receivedTime > 0) updateText.text = "قیمت به‌روزرسانی شد • ${formatTime(receivedTime)}"
-
             monitoringStatusText.text = "● پایش فعال"
             monitoringButton.text = "غیرفعال کردن برنامه"
         }
@@ -88,18 +85,15 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
         initializeViews()
         setupTimeframeSpinner()
         setupDropPercentSpinner()
         setupSoundSpinner()
         registerPriceReceiver()
         restoreMonitoringState()
-
         refreshButton.setOnClickListener { loadMarketData() }
         monitoringButton.setOnClickListener { toggleMonitoring() }
         soundTestButton.setOnClickListener { testSelectedSound() }
-
         loadMarketData()
     }
 
@@ -155,20 +149,17 @@ class MainActivity : AppCompatActivity() {
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, soundOptions)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         soundSpinner.adapter = adapter
-
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         soundSpinner.setSelection(prefs.getInt(MonitoringService.KEY_SOUND_INDEX, 0))
-
         soundSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 prefs.edit().putInt(MonitoringService.KEY_SOUND_INDEX, position).apply()
-                // Android notification channels retain their sound after creation.
-                // Recreate the alert channel so the new choice takes effect.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val manager = getSystemService(NotificationManager::class.java)
-                    manager.deleteNotificationChannel(MonitoringService.ALERT_CHANNEL_ID)
-                    startService(Intent(this@MainActivity, MonitoringService::class.java)
-                        .setAction(MonitoringService.ACTION_START))
+                if (prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)) {
+                    ContextCompat.startForegroundService(
+                        this@MainActivity,
+                        Intent(this@MainActivity, MonitoringService::class.java)
+                            .setAction(MonitoringService.ACTION_REFRESH_ALERT_CHANNEL)
+                    )
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -192,7 +183,6 @@ class MainActivity : AppCompatActivity() {
     private fun toggleMonitoring() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
-
         if (active) {
             ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_STOP))
             showMonitoringInactive()
@@ -202,10 +192,8 @@ class MainActivity : AppCompatActivity() {
             ) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
             }
-
             val selected = dropOptions.getOrNull(dropPercentSpinner.selectedItemPosition) ?: 3.0
             prefs.edit().putString(MonitoringService.KEY_DROP_PERCENT, selected.toString()).apply()
-
             ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_START))
             monitoringStatusText.text = "● در حال فعال‌سازی..."
             monitoringButton.text = "غیرفعال کردن برنامه"
@@ -219,7 +207,6 @@ class MainActivity : AppCompatActivity() {
         val index = dropOptions.indexOfFirst { kotlin.math.abs(it - savedPercent) < 0.001 }
         if (index >= 0) dropPercentSpinner.setSelection(index)
         dropPercentText.text = formatPercent(savedPercent)
-
         if (active) {
             monitoringStatusText.text = "● پایش فعال"
             monitoringButton.text = "غیرفعال کردن برنامه"
