@@ -63,26 +63,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun initializeViews() {
 
-        connectionText =
-            findViewById(R.id.connectionText)
-
-        openText =
-            findViewById(R.id.openText)
-
-        priceText =
-            findViewById(R.id.priceText)
-
-        changeText =
-            findViewById(R.id.changeText)
-
-        updateText =
-            findViewById(R.id.updateText)
-
-        timeframeSpinner =
-            findViewById(R.id.timeframeSpinner)
-
-        refreshButton =
-            findViewById(R.id.refreshButton)
+        connectionText = findViewById(R.id.connectionText)
+        openText = findViewById(R.id.openText)
+        priceText = findViewById(R.id.priceText)
+        changeText = findViewById(R.id.changeText)
+        updateText = findViewById(R.id.updateText)
+        timeframeSpinner = findViewById(R.id.timeframeSpinner)
+        refreshButton = findViewById(R.id.refreshButton)
     }
 
     private fun setupTimeframeSpinner() {
@@ -110,7 +97,6 @@ class MainActivity : AppCompatActivity() {
                     position: Int,
                     id: Long
                 ) {
-
                     loadMarketData()
                 }
 
@@ -129,7 +115,7 @@ class MainActivity : AppCompatActivity() {
             ) ?: return
 
         connectionText.text =
-            "● در حال دریافت اطلاعات..."
+            "● در حال آزمایش ارتباط..."
 
         lifecycleScope.launch {
 
@@ -144,14 +130,14 @@ class MainActivity : AppCompatActivity() {
                                 timeframe = selected.resolution
                             )
 
-                        val currentPrice =
+                        val price =
                             nobitexApi.getCurrentPrice(
                                 symbol = "USDTIRT"
                             )
 
                         Pair(
                             candles.lastOrNull(),
-                            currentPrice
+                            price
                         )
                     }
 
@@ -161,9 +147,11 @@ class MainActivity : AppCompatActivity() {
                 if (candle == null) {
 
                     connectionText.text =
-                        "● کندل دریافت نشد"
+                        "خطا: کندل دریافت نشد"
 
                     openText.text = "--"
+                    priceText.text = "--"
+
                     return@launch
                 }
 
@@ -182,19 +170,27 @@ class MainActivity : AppCompatActivity() {
                 updateChange()
 
                 connectionText.text =
-                    "● متصل به نوبیتکس"
+                    "● اتصال موفق به نوبیتکس"
 
                 updateText.text =
-                    "آخرین دریافت: ${currentTime()}"
+                    "دریافت موفق • ${currentTime()}"
 
             } catch (e: Exception) {
 
                 connectionText.text =
-                    "● خطا در ارتباط با نوبیتکس"
+                    "● خطا در دریافت اطلاعات"
+
+                openText.text =
+                    "خطا"
+
+                priceText.text =
+                    "خطا"
+
+                changeText.text =
+                    "--"
 
                 updateText.text =
                     e.message ?: "خطای نامشخص"
-
             }
         }
     }
@@ -235,15 +231,18 @@ class MainActivity : AppCompatActivity() {
                 updateChange()
 
                 connectionText.text =
-                    "● متصل به نوبیتکس"
+                    "● اتصال موفق به نوبیتکس"
 
                 updateText.text =
-                    "آخرین قیمت: ${currentTime()}"
+                    "قیمت به‌روزرسانی شد • ${currentTime()}"
 
             } catch (e: Exception) {
 
                 connectionText.text =
-                    "● ارتباط موقتاً قطع است"
+                    "● خطای قیمت لحظه‌ای"
+
+                updateText.text =
+                    e.message ?: "خطای نامشخص"
             }
         }
     }
@@ -258,9 +257,7 @@ class MainActivity : AppCompatActivity() {
             price == null ||
             open == 0.0
         ) {
-
             changeText.text = "--"
-
             return
         }
 
