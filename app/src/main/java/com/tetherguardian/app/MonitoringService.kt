@@ -28,10 +28,13 @@ class MonitoringService : Service() {
         const val EXTRA_TIME = "extra_time"
         const val EXTRA_BASE_PRICE = "extra_base_price"
         const val EXTRA_BASE_TIME = "extra_base_time"
+        const val EXTRA_DROP_LIMIT = "extra_drop_limit"
+        const val EXTRA_ALERT_TRIGGERED = "extra_alert_triggered"
         const val PREFS_NAME = "tether_guardian_state"
         const val KEY_ACTIVE = "active"
         const val KEY_BASE_PRICE = "base_price"
         const val KEY_BASE_TIME = "base_time"
+        const val KEY_DROP_PERCENT = "drop_percent"
     }
 
     private val api = NobitexApi()
@@ -85,6 +88,7 @@ class MonitoringService : Service() {
             val oldBase = prefs.getString(KEY_BASE_PRICE, null)?.toDoubleOrNull()
             var basePrice = oldBase
             var baseTime = prefs.getLong(KEY_BASE_TIME, 0L)
+            var alertTriggered = false
 
             if (oldBase == null || numericPrice > oldBase) {
                 basePrice = numericPrice
@@ -93,7 +97,26 @@ class MonitoringService : Service() {
                     .putString(KEY_BASE_PRICE, numericPrice.toString())
                     .putLong(KEY_BASE_TIME, baseTime)
                     .apply()
+            } else {
+                val dropPercent = prefs.getString(KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull() ?: 0.5
+                val dropLimit = basePrice * (1.0 - dropPercent / 100.0)
+
+                if (numericPrice <= dropLimit) {
+                    // The first real price at or below the threshold becomes the new base immediately.
+                    basePrice = numericPrice
+                    baseTime = now
+                    alertTriggered = true
+                    prefs.edit()
+                        .putString(KEY_BASE_PRICE, numericPrice.toString())
+                        .putLong(KEY_BASE_TIME, baseTime)
+                        .apply()
+                }
             }
+
+            val dropPercent = prefs.getString(KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull() ?: 0.5
+            val currentDropLimit = basePrice?.let {
+                it * (1.0 - dropPercent / 100.0)
+            } ?: 0.0
 
             sendBroadcast(
                 Intent(ACTION_PRICE_UPDATE).apply {
@@ -102,6 +125,8 @@ class MonitoringService : Service() {
                     putExtra(EXTRA_TIME, now)
                     putExtra(EXTRA_BASE_PRICE, basePrice ?: numericPrice)
                     putExtra(EXTRA_BASE_TIME, baseTime)
+                    putExtra(EXTRA_DROP_LIMIT, currentDropLimit)
+                    putExtra(EXTRA_ALERT_TRIGGERED, alertTriggered)
                 }
             )
         } catch (_: Exception) {
