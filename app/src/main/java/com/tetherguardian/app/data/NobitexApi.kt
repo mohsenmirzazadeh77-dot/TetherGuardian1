@@ -24,6 +24,9 @@ class NobitexApi {
      * 360 = شش ساعت
      * 720 = دوازده ساعت
      * D   = روزانه
+     *
+     * قیمت‌های OHLC مستقیماً با همان مقداری که
+     * API برمی‌گرداند استفاده می‌شوند.
      */
     fun getOhlc(
         symbol: String = "USDTIRT",
@@ -156,6 +159,12 @@ class NobitexApi {
 
     /**
      * دریافت آخرین قیمت معامله USDT/IRT
+     *
+     * API نوبیتکس مقدار lastTradePrice را برمی‌گرداند.
+     *
+     * در این پروژه قیمت‌ها در رابط کاربری بر اساس تومان نمایش داده
+     * می‌شوند. بنابراین مقدار دریافتی از Order Book به تومان تبدیل
+     * می‌شود تا با قیمت کندل OHLC هم‌مقیاس باشد.
      */
     fun getCurrentPrice(
         symbol: String = "USDTIRT"
@@ -196,12 +205,32 @@ class NobitexApi {
                 )
             }
 
-            return root["lastTradePrice"]
-                ?.jsonPrimitive
-                ?.content
-                ?: throw IOException(
-                    "lastTradePrice در پاسخ نوبیتکس وجود ندارد"
-                )
+            val lastTradePrice =
+                root["lastTradePrice"]
+                    ?.jsonPrimitive
+                    ?.content
+                    ?: throw IOException(
+                        "lastTradePrice در پاسخ نوبیتکس وجود ندارد"
+                    )
+
+            val price =
+                lastTradePrice.toDoubleOrNull()
+                    ?: throw IOException(
+                        "مقدار lastTradePrice عددی نیست: $lastTradePrice"
+                    )
+
+            /*
+             * قیمت لحظه‌ای Order Book در مقیاس ریال است.
+             * رابط کاربری برنامه بر اساس تومان است.
+             *
+             * مثال:
+             * 1,600,000 ریال
+             * تبدیل می‌شود به:
+             * 160,000 تومان
+             */
+            val tomanPrice = price / 10.0
+
+            return tomanPrice.toString()
         }
     }
 }
