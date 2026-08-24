@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.round
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,6 +52,9 @@ class MainActivity : AppCompatActivity() {
 
     private val decimalFormat =
         DecimalFormat("#,##0.########")
+
+    private val integerPriceFormat =
+        DecimalFormat("#,##0")
 
     private val dropOptions =
         (1..10).map { it * 0.5 }
@@ -100,27 +104,49 @@ class MainActivity : AppCompatActivity() {
                         0.0
                     )
 
+                /*
+                 * چون این Broadcast فقط بعد از دریافت موفق
+                 * قیمت از نوبیتکس ارسال می‌شود، دریافت آن
+                 * به معنی اتصال موفق است.
+                 */
                 if (price > 0) {
+
                     priceText.text =
                         formatPrice(price)
+
+                    connectionText.text =
+                        "● اتصال موفق به نوبیتکس"
+
+                    connectionText.setTextColor(
+                        getColorCompat(
+                            android.R.color.holo_green_dark
+                        )
+                    )
                 }
 
                 if (base > 0) {
+
                     baseText.text =
                         formatPrice(base)
                 }
 
                 if (baseTime > 0) {
+
                     baseTimeText.text =
                         "زمان ثبت: ${formatTime(baseTime)}"
                 }
 
                 if (dropLimit > 0) {
+
+                    /*
+                     * حد ریزش بدون اعشار نمایش داده می‌شود.
+                     */
                     dropLimitText.text =
-                        formatPrice(dropLimit)
+                        formatRoundedPrice(dropLimit)
                 }
 
                 if (receivedTime > 0) {
+
                     updateText.text =
                         "آخرین دریافت: ${formatTime(receivedTime)}"
                 }
@@ -262,6 +288,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         if (savedIndex >= 0) {
+
             dropPercentSpinner.setSelection(
                 savedIndex
             )
@@ -355,6 +382,7 @@ class MainActivity : AppCompatActivity() {
             savedSound >= 0 &&
             savedSound < sounds.size
         ) {
+
             soundSpinner.setSelection(
                 savedSound
             )
@@ -600,7 +628,7 @@ class MainActivity : AppCompatActivity() {
                     (1.0 - percent / 100.0)
 
             dropLimitText.text =
-                formatPrice(limit)
+                formatRoundedPrice(limit)
 
         } else {
 
@@ -655,6 +683,14 @@ class MainActivity : AppCompatActivity() {
                 e: Exception
             ) {
 
+                /*
+                 * ممکن است دریافت اولیه Activity
+                 * با خطا مواجه شود، ولی سرویس چند لحظه
+                 * بعد با موفقیت قیمت را دریافت کند.
+                 *
+                 * بنابراین این وضعیت با دریافت موفق
+                 * Broadcast توسط سرویس، خودکار اصلاح می‌شود.
+                 */
                 connectionText.text =
                     "● اتصال ناموفق به نوبیتکس"
 
@@ -719,9 +755,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
 
         try {
+
             unregisterReceiver(
                 priceReceiver
             )
+
         } catch (
             ignored: Exception
         ) {
@@ -747,6 +785,21 @@ class MainActivity : AppCompatActivity() {
 
         return decimalFormat.format(value) +
             " تومان"
+    }
+
+    /*
+     * مخصوص «حد ریزش»
+     *
+     * اعشار حذف می‌شود و مقدار به نزدیک‌ترین
+     * تومان گرد می‌شود.
+     */
+    private fun formatRoundedPrice(
+        value: Double
+    ): String {
+
+        return integerPriceFormat.format(
+            round(value)
+        ) + " تومان"
     }
 
     private fun formatPercent(
