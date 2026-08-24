@@ -23,13 +23,16 @@ class AlertActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         /*
-         * هشدار باید روی صفحه قفل قابل مشاهده باشد.
-         * اما نباید قفل گوشی را باز کند.
+         * صفحه هشدار می‌تواند روی Lock Screen نمایش داده شود.
+         *
+         * نکته مهم:
+         * FLAG_KEEP_SCREEN_ON عمداً استفاده نشده است.
+         *
+         * بنابراین برنامه صفحه گوشی را دائم روشن نگه نمی‌دارد.
          */
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -108,9 +111,6 @@ class AlertActivity : AppCompatActivity() {
                 MonitoringService::class.java
             ).setAction(
                 MonitoringService.ACTION_ALERT_ACKNOWLEDGED
-            ).putExtra(
-                MonitoringService.EXTRA_ALERT_ACKNOWLEDGED,
-                true
             )
         )
 
@@ -118,9 +118,12 @@ class AlertActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
+
         /*
-         * دکمه Back نباید هشدار را تأیید کند.
-         * صفحه هشدار نیز نباید با Back بسته شود.
+         * Back نباید هشدار را تأیید کند.
+         *
+         * اگر کاربر Back بزند، Activity به پس‌زمینه می‌رود
+         * ولی وضعیت هشدار توسط سرویس حفظ می‌شود.
          */
         moveTaskToBack(true)
     }
