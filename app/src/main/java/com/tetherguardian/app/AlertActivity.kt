@@ -3,19 +3,29 @@ package com.tetherguardian.app
 import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import java.text.DecimalFormat
+import java.util.Locale
 
 class AlertActivity : AppCompatActivity() {
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var acknowledged = false
 
     private lateinit var priceText: TextView
     private lateinit var baseText: TextView
     private lateinit var dropText: TextView
     private lateinit var acknowledgeButton: Button
     private lateinit var delayedButton: Button
+
+    private val autoClose = Runnable {
+        if (!acknowledged) finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,28 +60,40 @@ class AlertActivity : AppCompatActivity() {
 
         priceText.text = formatPrice(price)
         baseText.text = formatPrice(base)
-        dropText.text = String.format(java.util.Locale.US, "%.2f%%", drop)
+        dropText.text = String.format(Locale.US, "%+.2f%%", drop)
 
-        acknowledgeButton.setOnClickListener { finishAlert(true) }
-        delayedButton.setOnClickListener { finishAlert(true) }
+        acknowledgeButton.setOnClickListener { acknowledgeAndClose() }
+        delayedButton.setOnClickListener { acknowledgeAndClose() }
+
+        handler.postDelayed(autoClose, 30_000)
     }
 
-    private fun finishAlert(acknowledged: Boolean) {
-        sendBroadcast(
-            Intent(MonitoringService.ACTION_ALERT_ACKNOWLEDGED).apply {
-                setPackage(packageName)
-                putExtra(MonitoringService.EXTRA_ALERT_ACKNOWLEDGED, acknowledged)
-            }
+    private fun acknowledgeAndClose() {
+        if (acknowledged) return
+        acknowledged = true
+
+        startService(
+            Intent(this, MonitoringService::class.java)
+                .setAction(MonitoringService.ACTION_ALERT_ACKNOWLEDGED)
+                .putExtra(MonitoringService.EXTRA_ALERT_ACKNOWLEDGED, true)
         )
+
         finish()
     }
 
     override fun onBackPressed() {
-        // Back should not acknowledge the alert.
+        // Back does not acknowledge the alert.
         moveTaskToBack(true)
     }
 
+    override fun onDestroy() {
+        handler.removeCallbacks(autoClose)
+        super.onDestroy()
+    }
+
     private fun formatPrice(value: Double): String {
-        return if (value > 0) DecimalFormat("#,##0.########").format(value) + " تومان" else "--"
+        return if (value > 0) {
+            DecimalFormat("#,##0.########").format(value) + " تومان"
+        } else "--"
     }
 }
