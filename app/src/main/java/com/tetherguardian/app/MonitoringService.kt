@@ -7,8 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.IBinder
@@ -27,17 +25,11 @@ class MonitoringService : Service() {
 
     companion object {
 
-        const val CHANNEL_ID =
-            "tether_monitoring"
+        const val CHANNEL_ID = "tether_monitoring"
+        const val ALERT_CHANNEL_ID = "tether_alerts"
 
-        const val ALERT_CHANNEL_ID =
-            "tether_alerts"
-
-        const val NOTIFICATION_ID =
-            1001
-
-        const val ALERT_NOTIFICATION_ID =
-            2001
+        const val NOTIFICATION_ID = 1001
+        const val ALERT_NOTIFICATION_ID = 2001
 
         const val ACTION_START =
             "com.tetherguardian.app.action.START_MONITORING"
@@ -54,11 +46,11 @@ class MonitoringService : Service() {
         const val ACTION_ALERT_ACKNOWLEDGED =
             "com.tetherguardian.app.action.ALERT_ACKNOWLEDGED"
 
-        const val EXTRA_PRICE =
-            "extra_price"
+        const val ACTION_TEST_SOUND =
+            "com.tetherguardian.app.action.TEST_SOUND"
 
-        const val EXTRA_TIME =
-            "extra_time"
+        const val EXTRA_PRICE = "extra_price"
+        const val EXTRA_TIME = "extra_time"
 
         const val EXTRA_BASE_PRICE =
             "extra_base_price"
@@ -118,11 +110,10 @@ class MonitoringService : Service() {
     private var alertAcknowledged =
         false
 
-    private var currentRingtone: Ringtone? =
-        null
+    private val priceFormatter =
+        DecimalFormat("#,##0")
 
     override fun onCreate() {
-
         super.onCreate()
 
         createNotificationChannels()
@@ -159,6 +150,13 @@ class MonitoringService : Service() {
                 acknowledgeAlert()
             }
 
+            ACTION_TEST_SOUND -> {
+
+                startMonitoringForeground()
+
+                testSelectedSound()
+            }
+
             else -> {
 
                 startMonitoringForeground()
@@ -172,11 +170,18 @@ class MonitoringService : Service() {
         return START_STICKY
     }
 
+    // ---------------------------------------------------------
+    // شروع پایش
+    // ---------------------------------------------------------
+
     private fun startMonitoringForeground() {
 
         startForeground(
             NOTIFICATION_ID,
-            buildMonitoringNotification()
+            buildMonitoringNotification(
+                null,
+                null
+            )
         )
     }
 
@@ -200,6 +205,10 @@ class MonitoringService : Service() {
             }
     }
 
+    // ---------------------------------------------------------
+    // دریافت قیمت
+    // ---------------------------------------------------------
+
     private suspend fun fetchAndProcessPrice() {
 
         try {
@@ -212,6 +221,10 @@ class MonitoringService : Service() {
             val numericPrice =
                 price.toDoubleOrNull()
                     ?: return
+
+            if (numericPrice <= 0.0) {
+                return
+            }
 
             val now =
                 System.currentTimeMillis()
@@ -240,13 +253,11 @@ class MonitoringService : Service() {
             var alertTriggered =
                 false
 
-            /*
-             * اولین قیمت:
-             * خودش مبنا می‌شود.
-             *
-             * بعد از آن هر قیمت بالاتر،
-             * مبنای جدید می‌شود.
-             */
+            // -------------------------------------------------
+            // اولین قیمت = مبنا
+            // افزایش قیمت = مبنای جدید
+            // -------------------------------------------------
+
             if (
                 oldBase == null ||
                 numericPrice > oldBase
@@ -279,21 +290,19 @@ class MonitoringService : Service() {
                         ?: 3.0
 
                 val dropLimit =
-                    basePrice!! *
+                    basePrice *
                         (
                             1.0 -
                                 dropPercent / 100.0
                             )
 
-                /*
-                 * هر قیمت مساوی یا پایین‌تر
-                 * از حد هشدار معتبر است.
-                 *
-                 * منتظر رسیدن دقیق به عدد
-                 * محاسبه‌شده نمی‌مانیم.
-                 */
+                // -------------------------------------------------
+                // اگر قیمت به حد هشدار رسید
+                // -------------------------------------------------
+
                 if (
-                    numericPrice <= dropLimit
+                    numericPrice <=
+                    dropLimit
                 ) {
 
                     val previousBase =
@@ -303,22 +312,24 @@ class MonitoringService : Service() {
                         if (
                             previousBase > 0.0
                         ) {
+
                             (
                                 (
                                     numericPrice -
                                         previousBase
                                     ) /
-                                        previousBase
-                                    ) *
-                                    100.0
+                                    previousBase
+                                ) * 100.0
+
                         } else {
                             0.0
                         }
 
-                    /*
-                     * قیمت واقعی دریافت‌شده
-                     * فوراً مبنای جدید می‌شود.
-                     */
+                    // -------------------------------------------------
+                    // اولین قیمت واقعیِ دریافتی در محدوده هشدار
+                    // بلافاصله مبنای جدید می‌شود.
+                    // -------------------------------------------------
+
                     basePrice =
                         numericPrice
 
@@ -339,17 +350,17 @@ class MonitoringService : Service() {
                         )
                         .apply()
 
-                    /*
-                     * سیستم محاسبه مستقل از
-                     * سیستم اطلاع‌رسانی است.
-                     */
                     startAlertCycle(
-                        numericPrice,
-                        numericPrice,
-                        drop
+                        alertPrice = numericPrice,
+                        newBase = numericPrice,
+                        drop = drop
                     )
                 }
             }
+
+            // -------------------------------------------------
+            // محاسبه حد هشدار جدید
+            // -------------------------------------------------
 
             val dropPercent =
                 prefs.getString(
@@ -369,13 +380,18 @@ class MonitoringService : Service() {
 
                 } ?: 0.0
 
-            /*
-             * به‌روزرسانی اعلان دائمی
-             */
+            // -------------------------------------------------
+            // به‌روزرسانی اعلان دائمی
+            // -------------------------------------------------
+
             updateMonitoringNotification(
                 numericPrice,
                 currentDropLimit
             )
+
+            // -------------------------------------------------
+            // ارسال اطلاعات به MainActivity
+            // -------------------------------------------------
 
             sendBroadcast(
                 Intent(
@@ -421,39 +437,21 @@ class MonitoringService : Service() {
 
         } catch (_: Exception) {
 
-            /*
-             * در صورت خطا، چرخه بعدی
-             * دوباره تلاش می‌کند.
-             */
+            // خطا در دریافت قیمت:
+            // چرخه بعدی دوباره تلاش خواهد کرد.
         }
     }
 
-    /*
-     * =========================================================
-     * چرخه هشدار
-     * =========================================================
-     *
-     * فقط دو نوبت:
-     *
-     * هشدار اول: 30 ثانیه
-     * سکوت: 15 ثانیه
-     * هشدار دوم: 30 ثانیه
-     * پایان
-     *
-     * بعد از آن صفحه هشدار باقی می‌ماند
-     * ولی هیچ هشدار سومی وجود ندارد.
-     */
+    // ---------------------------------------------------------
+    // چرخه هشدار
+    // ---------------------------------------------------------
+
     private fun startAlertCycle(
         alertPrice: Double,
         newBase: Double,
         drop: Double
     ) {
 
-        /*
-         * اگر یک چرخه هشدار قبلی هنوز
-         * در حال اجراست، چرخه جدیدی
-         * روی آن ایجاد نمی‌کنیم.
-         */
         if (
             alertCycleJob?.isActive == true
         ) {
@@ -466,129 +464,62 @@ class MonitoringService : Service() {
         alertCycleJob =
             serviceScope.launch {
 
-                /*
-                 * -------------------------
-                 * هشدار اول
-                 * -------------------------
-                 */
-                showAlertPage(
-                    alertPrice,
-                    newBase,
-                    drop
-                )
-
-                playAlertSound()
-
-                delay(30_000)
-
-                if (
-                    alertAcknowledged
+                while (
+                    isActive &&
+                    !alertAcknowledged
                 ) {
-                    stopAlertSound()
-                    return@launch
+
+                    // هشدار اول
+                    showAlert(
+                        alertPrice,
+                        newBase,
+                        drop
+                    )
+
+                    delay(30_000)
+
+                    if (alertAcknowledged) {
+                        break
+                    }
+
+                    dismissAlertSurface()
+
+                    delay(15_000)
+
+                    if (alertAcknowledged) {
+                        break
+                    }
+
+                    // هشدار دوم
+                    showAlert(
+                        alertPrice,
+                        newBase,
+                        drop
+                    )
+
+                    delay(30_000)
+
+                    if (alertAcknowledged) {
+                        break
+                    }
+
+                    // -------------------------------------------------
+                    // بعد از هشدار دوم، دیگر هشدار تکرار نمی‌شود.
+                    // صفحه هشدار باید برای مشاهده بعدی باقی بماند.
+                    // -------------------------------------------------
+
+                    dismissAlertSurface()
+
+                    break
                 }
-
-                stopAlertSound()
-
-                /*
-                 * -------------------------
-                 * سکوت 15 ثانیه
-                 * -------------------------
-                 */
-                delay(15_000)
-
-                if (
-                    alertAcknowledged
-                ) {
-                    return@launch
-                }
-
-                /*
-                 * -------------------------
-                 * هشدار دوم
-                 * -------------------------
-                 *
-                 * Activity جدید باز نمی‌کنیم.
-                 *
-                 * همان صفحه هشدار قبلی باقی می‌ماند.
-                 * فقط صدا و ویبره دوباره اجرا می‌شوند.
-                 */
-                playAlertSound()
-
-                delay(30_000)
-
-                stopAlertSound()
-
-                /*
-                 * پایان کامل چرخه.
-                 *
-                 * صفحه هشدار بسته نمی‌شود.
-                 *
-                 * سرویس پایش قیمت همچنان
-                 * هر 10 ثانیه فعال است.
-                 */
-                alertCycleJob = null
             }
     }
 
-    /*
-     * فقط یک بار صفحه هشدار را باز می‌کنیم.
-     *
-     * بنابراین مشکل:
-     *
-     * روشن → خاموش → روشن → خاموش
-     *
-     * ایجاد نمی‌شود.
-     */
-    private fun showAlertPage(
-        alertPrice: Double,
-        newBase: Double,
-        drop: Double
-    ) {
+    // ---------------------------------------------------------
+    // نمایش هشدار
+    // ---------------------------------------------------------
 
-        val activityIntent =
-            Intent(
-                this,
-                AlertActivity::class.java
-            ).apply {
-
-                flags =
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP
-
-                putExtra(
-                    EXTRA_ALERT_PRICE,
-                    alertPrice
-                )
-
-                putExtra(
-                    EXTRA_ALERT_BASE,
-                    newBase
-                )
-
-                putExtra(
-                    EXTRA_ALERT_DROP,
-                    drop
-                )
-            }
-
-        startActivity(
-            activityIntent
-        )
-
-        /*
-         * اعلان نیز روی Lock Screen
-         * قابل مشاهده خواهد بود.
-         */
-        showAlertNotification(
-            alertPrice,
-            newBase,
-            drop
-        )
-    }
-
-    private fun showAlertNotification(
+    private fun showAlert(
         alertPrice: Double,
         newBase: Double,
         drop: Double
@@ -630,11 +561,6 @@ class MonitoringService : Service() {
                     PendingIntent.FLAG_IMMUTABLE
             )
 
-        val price =
-            DecimalFormat(
-                "#,##0"
-            ).format(alertPrice)
-
         val notification =
             NotificationCompat.Builder(
                 this,
@@ -647,19 +573,7 @@ class MonitoringService : Service() {
                     "هشدار ریزش تتر"
                 )
                 .setContentText(
-                    "قیمت: $price تومان"
-                )
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(
-                            "قیمت: $price تومان\n" +
-                                "ریزش: ${
-                                    String.format(
-                                        "%.2f",
-                                        drop
-                                    )
-                                }٪"
-                        )
+                    "قیمت به حد هشدار رسیده است"
                 )
                 .setPriority(
                     NotificationCompat.PRIORITY_MAX
@@ -669,11 +583,9 @@ class MonitoringService : Service() {
                 )
                 .setAutoCancel(false)
                 .setOngoing(true)
-                .setVisibility(
-                    NotificationCompat.VISIBILITY_PUBLIC
-                )
-                .setContentIntent(
-                    pendingIntent
+                .setFullScreenIntent(
+                    pendingIntent,
+                    true
                 )
                 .build()
 
@@ -685,91 +597,18 @@ class MonitoringService : Service() {
         )
     }
 
-    /*
-     * =========================================================
-     * صدای هشدار
-     * =========================================================
-     *
-     * صدا به صورت تکرارشونده اجرا می‌شود
-     * تا یک صدای بسیار کوتاه و قابل اشتباه
-     * نباشد.
-     */
-    private fun playAlertSound() {
+    private fun dismissAlertSurface() {
 
-        stopAlertSound()
-
-        try {
-
-            val uri =
-                selectedSoundUri()
-
-            val ringtone =
-                RingtoneManager.getRingtone(
-                    applicationContext,
-                    uri
-                )
-
-            ringtone.audioAttributes =
-                AudioAttributes.Builder()
-                    .setUsage(
-                        AudioAttributes.USAGE_NOTIFICATION_EVENT
-                    )
-                    .setContentType(
-                        AudioAttributes.CONTENT_TYPE_SONIFICATION
-                    )
-                    .build()
-
-            currentRingtone =
-                ringtone
-
-            ringtone.play()
-
-        } catch (_: Exception) {
-        }
+        getSystemService(
+            NotificationManager::class.java
+        ).cancel(
+            ALERT_NOTIFICATION_ID
+        )
     }
 
-    private fun stopAlertSound() {
-
-        try {
-
-            currentRingtone?.stop()
-
-        } catch (_: Exception) {
-        }
-
-        currentRingtone =
-            null
-    }
-
-    private fun selectedSoundUri(): Uri {
-
-        val index =
-            getSharedPreferences(
-                PREFS_NAME,
-                MODE_PRIVATE
-            ).getInt(
-                KEY_SOUND_INDEX,
-                0
-            )
-
-        return when (index) {
-
-            1 ->
-                RingtoneManager.getDefaultUri(
-                    RingtoneManager.TYPE_ALARM
-                )
-
-            2 ->
-                RingtoneManager.getDefaultUri(
-                    RingtoneManager.TYPE_RINGTONE
-                )
-
-            else ->
-                RingtoneManager.getDefaultUri(
-                    RingtoneManager.TYPE_NOTIFICATION
-                )
-        }
-    }
+    // ---------------------------------------------------------
+    // تأیید مشاهده هشدار
+    // ---------------------------------------------------------
 
     private fun acknowledgeAlert() {
 
@@ -781,19 +620,12 @@ class MonitoringService : Service() {
         alertCycleJob =
             null
 
-        stopAlertSound()
-
         dismissAlertSurface()
     }
 
-    private fun dismissAlertSurface() {
-
-        getSystemService(
-            NotificationManager::class.java
-        ).cancel(
-            ALERT_NOTIFICATION_ID
-        )
-    }
+    // ---------------------------------------------------------
+    // وضعیت فعال بودن
+    // ---------------------------------------------------------
 
     private fun markActive() {
 
@@ -808,6 +640,10 @@ class MonitoringService : Service() {
             )
             .apply()
     }
+
+    // ---------------------------------------------------------
+    // توقف کامل برنامه
+    // ---------------------------------------------------------
 
     private fun stopMonitoring() {
 
@@ -824,8 +660,6 @@ class MonitoringService : Service() {
         alertAcknowledged =
             true
 
-        stopAlertSound()
-
         dismissAlertSurface()
 
         getSharedPreferences(
@@ -837,12 +671,33 @@ class MonitoringService : Service() {
             .apply()
     }
 
-    /*
-     * =========================================================
-     * اعلان دائمی پایش
-     * =========================================================
-     */
-    private fun buildMonitoringNotification(): Notification {
+    // ---------------------------------------------------------
+    // اعلان دائمی پایش
+    // ---------------------------------------------------------
+
+    private fun buildMonitoringNotification(
+        price: Double?,
+        dropLimit: Double?
+    ): Notification {
+
+        val contentText =
+            if (
+                price != null &&
+                price > 0.0 &&
+                dropLimit != null &&
+                dropLimit > 0.0
+            ) {
+
+                "قیمت لحظه‌ای: " +
+                    formatNotificationPrice(price) +
+                    " تومان | حد هشدار: " +
+                    formatNotificationPrice(dropLimit) +
+                    " تومان"
+
+            } else {
+
+                "در حال دریافت قیمت از نوبیتکس..."
+            }
 
         return NotificationCompat.Builder(
             this,
@@ -855,7 +710,11 @@ class MonitoringService : Service() {
                 "نگهبان تتر — پایش فعال"
             )
             .setContentText(
-                "در حال دریافت قیمت..."
+                contentText
+            )
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(contentText)
             )
             .setOngoing(true)
             .setCategory(
@@ -864,9 +723,8 @@ class MonitoringService : Service() {
             .setPriority(
                 NotificationCompat.PRIORITY_LOW
             )
-            .setVisibility(
-                NotificationCompat.VISIBILITY_PUBLIC
-            )
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .build()
     }
 
@@ -875,55 +733,33 @@ class MonitoringService : Service() {
         dropLimit: Double
     ) {
 
-        val priceText =
-            DecimalFormat(
-                "#,##0"
-            ).format(price)
-
-        val limitText =
-            DecimalFormat(
-                "#,##0"
-            ).format(dropLimit)
-
-        val notification =
-            NotificationCompat.Builder(
-                this,
-                CHANNEL_ID
+        val manager =
+            getSystemService(
+                NotificationManager::class.java
             )
-                .setSmallIcon(
-                    android.R.drawable.ic_popup_sync
-                )
-                .setContentTitle(
-                    "نگهبان تتر — پایش فعال"
-                )
-                .setContentText(
-                    "قیمت: $priceText تومان | حد هشدار: $limitText تومان"
-                )
-                .setOngoing(true)
-                .setCategory(
-                    NotificationCompat.CATEGORY_SERVICE
-                )
-                .setPriority(
-                    NotificationCompat.PRIORITY_LOW
-                )
-                .setVisibility(
-                    NotificationCompat.VISIBILITY_PUBLIC
-                )
-                .build()
 
-        getSystemService(
-            NotificationManager::class.java
-        ).notify(
+        manager.notify(
             NOTIFICATION_ID,
-            notification
+            buildMonitoringNotification(
+                price,
+                dropLimit
+            )
         )
     }
 
-    /*
-     * =========================================================
-     * Notification Channels
-     * =========================================================
-     */
+    private fun formatNotificationPrice(
+        value: Double
+    ): String {
+
+        return priceFormatter.format(
+            value
+        )
+    }
+
+    // ---------------------------------------------------------
+    // کانال‌های اعلان
+    // ---------------------------------------------------------
+
     private fun createNotificationChannels() {
 
         val manager =
@@ -984,17 +820,16 @@ class MonitoringService : Service() {
                         900
                     )
 
-                /*
-                 * صدای خود Notification Channel
-                 * خاموش است.
-                 *
-                 * صدا را خود سرویس کنترل می‌کند
-                 * تا بتوانیم دقیقاً 30 ثانیه
-                 * روشن و سپس خاموش کنیم.
-                 */
                 setSound(
-                    null,
-                    null
+                    selectedSoundUri(),
+                    AudioAttributes.Builder()
+                        .setUsage(
+                            AudioAttributes.USAGE_ALARM
+                        )
+                        .setContentType(
+                            AudioAttributes.CONTENT_TYPE_SONIFICATION
+                        )
+                        .build()
                 )
 
                 lockscreenVisibility =
@@ -1006,13 +841,85 @@ class MonitoringService : Service() {
         )
     }
 
+    // ---------------------------------------------------------
+    // انتخاب صدای هشدار
+    // ---------------------------------------------------------
+
+    private fun selectedSoundUri(): Uri {
+
+        val index =
+            getSharedPreferences(
+                PREFS_NAME,
+                MODE_PRIVATE
+            )
+                .getInt(
+                    KEY_SOUND_INDEX,
+                    0
+                )
+
+        return when (index) {
+
+            1 ->
+                RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_ALARM
+                )
+
+            2 ->
+                RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_RINGTONE
+                )
+
+            else ->
+                RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_NOTIFICATION
+                )
+        }
+    }
+
+    // ---------------------------------------------------------
+    // آزمایش صدای انتخاب‌شده
+    // ---------------------------------------------------------
+
+    private fun testSelectedSound() {
+
+        val soundUri =
+            selectedSoundUri()
+
+        try {
+
+            val ringtone =
+                RingtoneManager.getRingtone(
+                    applicationContext,
+                    soundUri
+                )
+
+            ringtone.play()
+
+            serviceScope.launch {
+
+                delay(5_000)
+
+                try {
+                    if (ringtone.isPlaying) {
+                        ringtone.stop()
+                    }
+                } catch (_: Exception) {
+                }
+            }
+
+        } catch (_: Exception) {
+        }
+    }
+
+    // ---------------------------------------------------------
+    // پایان سرویس
+    // ---------------------------------------------------------
+
     override fun onDestroy() {
 
         monitoringJob?.cancel()
 
         alertCycleJob?.cancel()
-
-        stopAlertSound()
 
         serviceScope.cancel()
 
@@ -1021,5 +928,8 @@ class MonitoringService : Service() {
 
     override fun onBind(
         intent: Intent?
-    ): IBinder? = null
+    ): IBinder? {
+
+        return null
+    }
 }
