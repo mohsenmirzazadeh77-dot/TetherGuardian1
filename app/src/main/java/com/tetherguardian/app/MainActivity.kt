@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -35,8 +36,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var updateText: TextView
     private lateinit var baseText: TextView
     private lateinit var baseTimeText: TextView
+    private lateinit var dropPercentText: TextView
+    private lateinit var dropLimitText: TextView
     private lateinit var monitoringStatusText: TextView
     private lateinit var monitoringButton: Button
+    private lateinit var dropPercentSpinner: Spinner
     private lateinit var timeframeSpinner: Spinner
     private lateinit var refreshButton: Button
 
@@ -50,6 +54,8 @@ class MainActivity : AppCompatActivity() {
         Timeframe("روزانه", "D")
     )
 
+    private val dropOptions = (1..10).map { it * 0.5 }
+
     private val priceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != MonitoringService.ACTION_PRICE_UPDATE) return
@@ -58,10 +64,12 @@ class MainActivity : AppCompatActivity() {
             val base = intent.getDoubleExtra(MonitoringService.EXTRA_BASE_PRICE, 0.0)
             val baseTime = intent.getLongExtra(MonitoringService.EXTRA_BASE_TIME, 0L)
             val receivedTime = intent.getLongExtra(MonitoringService.EXTRA_TIME, 0L)
+            val dropLimit = intent.getDoubleExtra(MonitoringService.EXTRA_DROP_LIMIT, 0.0)
 
             if (price > 0) priceText.text = formatPrice(price)
             if (base > 0) baseText.text = formatPrice(base)
             if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
+            if (dropLimit > 0) dropLimitText.text = formatPrice(dropLimit)
             if (receivedTime > 0) updateText.text = "قیمت به‌روزرسانی شد • ${formatTime(receivedTime)}"
 
             monitoringStatusText.text = "● پایش فعال"
@@ -75,6 +83,7 @@ class MainActivity : AppCompatActivity() {
 
         initializeViews()
         setupTimeframeSpinner()
+        setupDropPercentSpinner()
         registerPriceReceiver()
         restoreMonitoringState()
 
@@ -92,8 +101,11 @@ class MainActivity : AppCompatActivity() {
         updateText = findViewById(R.id.updateText)
         baseText = findViewById(R.id.baseText)
         baseTimeText = findViewById(R.id.baseTimeText)
+        dropPercentText = findViewById(R.id.dropPercentText)
+        dropLimitText = findViewById(R.id.dropLimitText)
         monitoringStatusText = findViewById(R.id.monitoringStatusText)
         monitoringButton = findViewById(R.id.monitoringButton)
+        dropPercentSpinner = findViewById(R.id.dropPercentSpinner)
         timeframeSpinner = findViewById(R.id.timeframeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
     }
@@ -104,9 +116,31 @@ class MainActivity : AppCompatActivity() {
         timeframeSpinner.adapter = adapter
         timeframeSpinner.setSelection(0)
         timeframeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 loadMarketData()
             }
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun setupDropPercentSpinner() {
+        val labels = dropOptions.map { formatPercent(it) }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, labels)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        dropPercentSpinner.adapter = adapter
+        dropPercentSpinner.setSelection(5) // Default: 3%
+
+        dropPercentSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selected = dropOptions.getOrNull(position) ?: 3.0
+                dropPercentText.text = formatPercent(selected)
+                getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString(MonitoringService.KEY_DROP_PERCENT, selected.toString())
+                    .apply()
+                updateDropLimitFromStoredBase(selected)
+            }
+
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
     }
@@ -128,6 +162,12 @@ class MainActivity : AppCompatActivity() {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
             }
 
+            // Store the selected threshold before starting the service.
+            val selected = dropOptions.getOrNull(dropPercentSpinner.selectedItemPosition) ?: 3.0
+            prefs.edit()
+                .putString(MonitoringService.KEY_DROP_PERCENT, selected.toString())
+                .apply()
+
             ContextCompat.startForegroundService(
                 this,
                 Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_START)
@@ -140,6 +180,11 @@ class MainActivity : AppCompatActivity() {
     private fun restoreMonitoringState() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
+        val savedPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
+        val index = dropOptions.indexOfFirst { kotlin.math.abs(it - savedPercent) < 0.001 }
+        if (index >= 0) dropPercentSpinner.setSelection(index)
+        dropPercentText.text = formatPercent(savedPercent)
+
         if (active) {
             monitoringStatusText.text = "● پایش فعال"
             monitoringButton.text = "غیرفعال کردن برنامه"
@@ -147,6 +192,7 @@ class MainActivity : AppCompatActivity() {
             val baseTime = prefs.getLong(MonitoringService.KEY_BASE_TIME, 0L)
             if (base != null) baseText.text = formatPrice(base.toDouble())
             if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
+            updateDropLimitFromStoredBase(savedPercent)
         } else {
             showMonitoringInactive()
         }
@@ -157,6 +203,19 @@ class MainActivity : AppCompatActivity() {
         monitoringButton.text = "فعال کردن برنامه"
         baseText.text = "--"
         baseTimeText.text = "زمان ثبت: --"
+        dropLimitText.text = "--"
+    }
+
+    private fun updateDropLimitFromStoredBase(percent: Double) {
+        val base = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+            .getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull()
+
+        if (base != null && base > 0) {
+            dropLimitText.text = formatPrice(base * (1.0 - percent / 100.0))
+        } else if (!getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(MonitoringService.KEY_ACTIVE, false)) {
+            dropLimitText.text = "--"
+        }
     }
 
     private fun loadMarketData() {
@@ -219,6 +278,8 @@ class MainActivity : AppCompatActivity() {
     private fun formatPrice(value: String): String = value.toDoubleOrNull()?.let { formatPrice(it) } ?: value
 
     private fun formatPrice(value: Double): String = decimalFormat.format(value) + " تومان"
+
+    private fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
 
     private fun currentTime(): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
