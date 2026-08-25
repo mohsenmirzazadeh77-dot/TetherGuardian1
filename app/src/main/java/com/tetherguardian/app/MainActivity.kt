@@ -6,10 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.media.RingtoneManager
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -50,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var soundSpinner: Spinner
     private lateinit var soundTestButton: Button
 
-    private var suppressSoundPicker = false
+    private var settingUpSoundSelector = false
 
     private val nobitexApi = NobitexApi()
     private val decimalFormat = DecimalFormat("#,##0.########")
@@ -134,48 +135,54 @@ class MainActivity : AppCompatActivity() {
         dropPercentText.text = formatPercent(initial)
     }
 
+    /**
+     * There is deliberately only one sound option now: a sound selected by the user
+     * from the phone. The old three built-in options are removed from the UI.
+     *
+     * Important: setup/restore never opens the picker. The picker opens only when
+     * the user deliberately touches this selector. This prevents the sound picker
+     * from reopening when MainActivity is opened from the notification.
+     */
     private fun setupSoundSpinner() {
-        suppressSoundPicker = true
+        settingUpSoundSelector = true
 
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val customTitle = prefs.getString(MonitoringService.KEY_SOUND_TITLE, null)
-        val sounds = listOf(
-            "هشدار پیش‌فرض",
-            "هشدار شدید",
-            "هشدار کوتاه",
-            if (customTitle.isNullOrBlank()) "انتخاب صدا از گوشی..." else "صدای گوشی: $customTitle"
-        )
-
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, sounds)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        soundSpinner.adapter = adapter
-
-        val savedSound = prefs.getInt(MonitoringService.KEY_SOUND_INDEX, 0)
-        soundSpinner.setSelection(savedSound.coerceIn(0, sounds.size - 1))
-
-        soundSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                when (position) {
-                    3 -> if (!suppressSoundPicker) openSoundPicker()
-                    else -> prefs.edit()
-                        .putInt(MonitoringService.KEY_SOUND_INDEX, position)
-                        .remove(MonitoringService.KEY_SOUND_URI)
-                        .remove(MonitoringService.KEY_SOUND_TITLE)
-                        .apply()
-                }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        val label = if (customTitle.isNullOrBlank()) {
+            "انتخاب صدای هشدار از گوشی"
+        } else {
+            "صدای انتخاب‌شده: $customTitle"
         }
 
-        suppressSoundPicker = false
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            listOf(label)
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        soundSpinner.adapter = adapter
+        soundSpinner.setSelection(0, false)
+
+        // Do not use onItemSelected to launch the picker: Android may call it
+        // automatically during Activity creation/restoration.
+        soundSpinner.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP && !settingUpSoundSelector) {
+                openSoundPicker()
+                true
+            } else {
+                true
+            }
+        }
+
+        settingUpSoundSelector = false
     }
 
     private fun openSoundPicker() {
-        val picker = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار")
-            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         startActivityForResult(picker, REQUEST_SOUND)
     }
@@ -185,15 +192,18 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
 
-        val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI) ?: return
-        val ringtoneTitle = try {
-            RingtoneManager.getRingtone(this, uri)?.getTitle(this)
-        } catch (_: Exception) {
-            null
-        }
-        val title = ringtoneTitle ?: "صدای انتخاب‌شده"
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+        val uri = data?.data ?: return
 
+        try {
+            val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            if (takeFlags != 0) {
+                contentResolver.takePersistableUriPermission(uri, takeFlags)
+            }
+        } catch (_: Exception) {
+        }
+
+        val title = getDisplayName(uri) ?: "صدای انتخاب‌شده"
+        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         prefs.edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
             .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
@@ -201,9 +211,22 @@ class MainActivity : AppCompatActivity() {
             .apply()
 
         setupSoundSpinner()
-        suppressSoundPicker = true
-        soundSpinner.setSelection(3)
-        suppressSoundPicker = false
+    }
+
+    private fun getDisplayName(uri: Uri): String? {
+        var cursor: Cursor? = null
+        return try {
+            cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                cursor.getString(0)
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            cursor?.close()
+        }
     }
 
     private fun toggleMonitoring() {
