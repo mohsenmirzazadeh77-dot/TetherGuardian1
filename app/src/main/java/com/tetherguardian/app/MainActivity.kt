@@ -6,12 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.database.Cursor
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
-import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.View
 import android.widget.AdapterView
@@ -154,12 +153,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openSoundPicker() {
-        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "audio/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        val currentUri = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+            .getString(MonitoringService.KEY_SOUND_URI, null)
+            ?.let { Uri.parse(it) }
+
+        val picker = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            if (currentUri != null) {
+                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, currentUri)
+            }
         }
+
         startActivityForResult(picker, REQUEST_SOUND)
     }
 
@@ -167,26 +174,24 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
-        val uri = data?.data ?: return
-        try {
-            val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-            if (takeFlags != 0) contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (_: Exception) { }
-        val title = getDisplayName(uri) ?: "صدای انتخاب‌شده"
+
+        val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            ?: data?.data
+            ?: return
+
+        val title = try {
+            RingtoneManager.getRingtone(this, uri)?.getTitle(this)
+        } catch (_: Exception) {
+            null
+        } ?: "صدای انتخاب‌شده"
+
         getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
             .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
             .putString(MonitoringService.KEY_SOUND_TITLE, title)
             .apply()
-        setupSoundSpinner()
-    }
 
-    private fun getDisplayName(uri: Uri): String? {
-        var cursor: Cursor? = null
-        return try {
-            cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            if (cursor != null && cursor.moveToFirst()) cursor.getString(0) else null
-        } catch (_: Exception) { null } finally { cursor?.close() }
+        setupSoundSpinner()
     }
 
     private fun previewAlertScreen() {
