@@ -10,13 +10,16 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -36,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_SOUND = 3101
+        private const val PREF_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
     }
 
     private lateinit var connectionText: TextView
@@ -53,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var alertPreviewButton: Button
 
     private var settingUpSoundSelector = false
-
     private val nobitexApi = NobitexApi()
     private val decimalFormat = DecimalFormat("#,##0.########")
     private val integerPriceFormat = DecimalFormat("#,##0")
@@ -62,13 +65,11 @@ class MainActivity : AppCompatActivity() {
     private val priceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != MonitoringService.ACTION_PRICE_UPDATE) return
-
             val price = intent.getDoubleExtra(MonitoringService.EXTRA_PRICE, 0.0)
             val base = intent.getDoubleExtra(MonitoringService.EXTRA_BASE_PRICE, 0.0)
             val baseTime = intent.getLongExtra(MonitoringService.EXTRA_BASE_TIME, 0L)
             val receivedTime = intent.getLongExtra(MonitoringService.EXTRA_TIME, 0L)
             val dropLimit = intent.getDoubleExtra(MonitoringService.EXTRA_DROP_LIMIT, 0.0)
-
             if (price > 0) {
                 priceText.text = formatPrice(price)
                 connectionText.text = "● اتصال موفق به نوبیتکس"
@@ -90,7 +91,6 @@ class MainActivity : AppCompatActivity() {
         setupSoundSpinner()
         registerPriceReceiver()
         restoreMonitoringState()
-
         monitoringButton.setOnClickListener { toggleMonitoring() }
         soundTestButton.setOnClickListener { testSelectedSound() }
         alertPreviewButton.setOnClickListener { previewAlertScreen() }
@@ -118,12 +118,10 @@ class MainActivity : AppCompatActivity() {
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, labels)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         dropPercentSpinner.adapter = adapter
-
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val savedPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
         val savedIndex = dropOptions.indexOfFirst { abs(it - savedPercent) < 0.001 }
         if (savedIndex >= 0) dropPercentSpinner.setSelection(savedIndex)
-
         dropPercentSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val selected = dropOptions.getOrNull(position) ?: 3.0
@@ -133,7 +131,6 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
-
         val initial = dropOptions.getOrNull(if (savedIndex >= 0) savedIndex else 5) ?: 3.0
         dropPercentText.text = formatPercent(initial)
     }
@@ -143,7 +140,6 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val customTitle = prefs.getString(MonitoringService.KEY_SOUND_TITLE, null)
         val label = if (customTitle.isNullOrBlank()) "انتخاب صدای هشدار از گوشی" else "صدای انتخاب‌شده: $customTitle"
-
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf(label))
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         soundSpinner.adapter = adapter
@@ -172,13 +168,10 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-
         try {
             val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             if (takeFlags != 0) contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (_: Exception) {
-        }
-
+        } catch (_: Exception) { }
         val title = getDisplayName(uri) ?: "صدای انتخاب‌شده"
         getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
@@ -193,43 +186,31 @@ class MainActivity : AppCompatActivity() {
         return try {
             cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             if (cursor != null && cursor.moveToFirst()) cursor.getString(0) else null
-        } catch (_: Exception) {
-            null
-        } finally {
-            cursor?.close()
-        }
+        } catch (_: Exception) { null } finally { cursor?.close() }
     }
 
     private fun previewAlertScreen() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val currentPrice = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull()
-            ?: 0.0
-        val dropPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull()
-            ?: 0.5
+        val currentPrice = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull() ?: 0.0
+        val dropPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull() ?: 0.5
         val base = if (currentPrice > 0.0) currentPrice else 100_000.0
         val previewPrice = base * (1.0 - dropPercent / 100.0)
-        val previewDrop = -dropPercent
-
-        startActivity(
-            Intent(this, AlertActivity::class.java).apply {
-                putExtra(MonitoringService.EXTRA_ALERT_PRICE, previewPrice)
-                putExtra(MonitoringService.EXTRA_ALERT_BASE, base)
-                putExtra(MonitoringService.EXTRA_ALERT_DROP, previewDrop)
-                putExtra("preview_mode", true)
-            }
-        )
+        startActivity(Intent(this, AlertActivity::class.java).apply {
+            putExtra(MonitoringService.EXTRA_ALERT_PRICE, previewPrice)
+            putExtra(MonitoringService.EXTRA_ALERT_BASE, base)
+            putExtra(MonitoringService.EXTRA_ALERT_DROP, -dropPercent)
+            putExtra("preview_mode", true)
+        })
     }
 
     private fun toggleMonitoring() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
-
         if (active) {
             ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_STOP))
             setMonitoringInactiveAppearance()
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
             }
             val selected = dropOptions.getOrNull(dropPercentSpinner.selectedItemPosition) ?: 3.0
@@ -238,7 +219,37 @@ class MainActivity : AppCompatActivity() {
             monitoringStatusText.text = "● در حال فعال‌سازی..."
             monitoringStatusText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
             monitoringButton.text = "غیرفعال کردن برنامه"
+            maybePromptBatteryOptimization()
         }
+    }
+
+    private fun maybePromptBatteryOptimization() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) return
+        val powerManager = getSystemService(PowerManager::class.java)
+        if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("پایداری پایش تتر")
+            .setMessage("برای اطمینان از ادامه پایش قیمت و اجرای هشدار در پس‌زمینه، پیشنهاد می‌شود «نگهبان تتر» را از بهینه‌سازی مصرف باتری مستثنی کنید. در صورت فعال‌سازی این گزینه، احتمال توقف برنامه در پس‌زمینه کمتر می‌شود.")
+            .setPositiveButton("باز کردن تنظیمات باتری") { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    })
+                } catch (_: Exception) {
+                    try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) { }
+                }
+                prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+            }
+            .setNegativeButton("بعداً") { _, _ ->
+                prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+            }
+            .setCancelable(false)
+            .show()
     }
 
     private fun restoreMonitoringState() {
@@ -318,8 +329,7 @@ class MainActivity : AppCompatActivity() {
     private fun formatTime(timestamp: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
 
     private fun getColorCompat(colorRes: Int): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) getColor(colorRes)
-        else {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) getColor(colorRes) else {
             @Suppress("DEPRECATION")
             resources.getColor(colorRes)
         }
