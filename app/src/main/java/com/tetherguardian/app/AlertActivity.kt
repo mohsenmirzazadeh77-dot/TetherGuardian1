@@ -1,5 +1,6 @@
 package com.tetherguardian.app
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,7 +23,15 @@ class AlertActivity : AppCompatActivity() {
 
     private val endAlertDisplay = Runnable {
         if (!acknowledged) {
+            // The alert remains as an activity, but it must no longer keep
+            // the display awake. While the phone is locked, hide this window;
+            // after the user unlocks, Android can show the activity again.
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                setTurnScreenOn(false)
+                setShowWhenLocked(false)
+            }
         }
     }
 
@@ -67,9 +76,10 @@ class AlertActivity : AppCompatActivity() {
         acknowledged = true
         handler.removeCallbacks(endAlertDisplay)
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
 
         startService(
-            android.content.Intent(this, MonitoringService::class.java)
+            Intent(this, MonitoringService::class.java)
                 .setAction(MonitoringService.ACTION_ALERT_ACKNOWLEDGED)
                 .putExtra(MonitoringService.EXTRA_ALERT_ACKNOWLEDGED, true)
         )
@@ -78,14 +88,20 @@ class AlertActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        // Back هشدار را تأیید نمی‌کند و صفحه هشدار را نمی‌بندد.
+        // Back does not acknowledge the alert.
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setTurnScreenOn(false)
+            setShowWhenLocked(false)
+        }
         moveTaskToBack(true)
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(endAlertDisplay)
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         super.onDestroy()
     }
 
