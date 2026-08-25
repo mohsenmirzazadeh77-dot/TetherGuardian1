@@ -156,21 +156,14 @@ class MainActivity : AppCompatActivity() {
         soundSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 when (position) {
-                    3 -> {
-                        if (!suppressSoundPicker) {
-                            openSoundPicker()
-                        }
-                    }
-                    else -> {
-                        prefs.edit()
-                            .putInt(MonitoringService.KEY_SOUND_INDEX, position)
-                            .remove(MonitoringService.KEY_SOUND_URI)
-                            .remove(MonitoringService.KEY_SOUND_TITLE)
-                            .apply()
-                    }
+                    3 -> if (!suppressSoundPicker) openSoundPicker()
+                    else -> prefs.edit()
+                        .putInt(MonitoringService.KEY_SOUND_INDEX, position)
+                        .remove(MonitoringService.KEY_SOUND_URI)
+                        .remove(MonitoringService.KEY_SOUND_TITLE)
+                        .apply()
                 }
             }
-
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
 
@@ -193,7 +186,12 @@ class MainActivity : AppCompatActivity() {
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
 
         val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI) ?: return
-        val title = data.getStringExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_TITLE) ?: "صدای انتخاب‌شده"
+        val ringtoneTitle = try {
+            RingtoneManager.getRingtone(this, uri)?.getTitle(this)
+        } catch (_: Exception) {
+            null
+        }
+        val title = ringtoneTitle ?: "صدای انتخاب‌شده"
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
 
         prefs.edit()
