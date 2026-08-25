@@ -22,9 +22,6 @@ class AlertActivity : AppCompatActivity() {
 
     private val endAlertDisplay = Runnable {
         if (!acknowledged) {
-            // بعد از ۳۰ ثانیه فقط اجازه روشن ماندن دائمی صفحه را حذف می‌کنیم.
-            // Activity را نمی‌بندیم و به پس‌زمینه هم نمی‌فرستیم؛
-            // بنابراین بعد از باز شدن قفل، همین صفحه هشدار دوباره دیده می‌شود.
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
@@ -81,10 +78,9 @@ class AlertActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        // Back هشدار را تأیید نمی‌کند.
-        // صفحه باقی می‌ماند تا کاربر دکمه «مشاهده هشدار» را بزند.
+        // Back هشدار را تأیید نمی‌کند و صفحه هشدار را نمی‌بندد.
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        super.onBackPressed()
+        moveTaskToBack(true)
     }
 
     override fun onDestroy() {
