@@ -162,11 +162,8 @@ class MainActivity : AppCompatActivity() {
             putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار")
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-            if (currentUri != null) {
-                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, currentUri)
-            }
+            if (currentUri != null) putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, currentUri)
         }
-
         startActivityForResult(picker, REQUEST_SOUND)
     }
 
@@ -174,23 +171,15 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
-
         val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
-            ?: data?.data
-            ?: return
-
-        val title = try {
-            RingtoneManager.getRingtone(this, uri)?.getTitle(this)
-        } catch (_: Exception) {
-            null
-        } ?: "صدای انتخاب‌شده"
-
+            ?: data?.data ?: return
+        val title = try { RingtoneManager.getRingtone(this, uri)?.getTitle(this) } catch (_: Exception) { null }
+            ?: "صدای انتخاب‌شده"
         getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
             .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
             .putString(MonitoringService.KEY_SOUND_TITLE, title)
             .apply()
-
         setupSoundSpinner()
     }
 
@@ -231,15 +220,17 @@ class MainActivity : AppCompatActivity() {
     private fun maybePromptBatteryOptimization() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) return
         val powerManager = getSystemService(PowerManager::class.java)
         if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
             prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
             return
         }
+
+        // Do not suppress the prompt just because it was shown in a previous
+        // run. If optimization is still enabled, keep helping the user fix it.
         AlertDialog.Builder(this)
             .setTitle("پایداری پایش تتر")
-            .setMessage("برای اطمینان از ادامه پایش قیمت و اجرای هشدار در پس‌زمینه، پیشنهاد می‌شود «نگهبان تتر» را از بهینه‌سازی مصرف باتری مستثنی کنید. در صورت فعال‌سازی این گزینه، احتمال توقف برنامه در پس‌زمینه کمتر می‌شود.")
+            .setMessage("برای اطمینان از ادامه پایش قیمت و اجرای هشدار در پس‌زمینه، «نگهبان تتر» باید از بهینه‌سازی مصرف باتری مستثنی شود. در حال حاضر این دسترسی فعال نیست.")
             .setPositiveButton("باز کردن تنظیمات باتری") { _, _ ->
                 try {
                     startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
