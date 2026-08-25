@@ -10,7 +10,6 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -50,6 +49,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dropPercentSpinner: Spinner
     private lateinit var soundSpinner: Spinner
     private lateinit var soundTestButton: Button
+
+    private var suppressSoundPicker = false
 
     private val nobitexApi = NobitexApi()
     private val decimalFormat = DecimalFormat("#,##0.########")
@@ -134,9 +135,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSoundSpinner() {
+        suppressSoundPicker = true
+
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val customTitle = prefs.getString(MonitoringService.KEY_SOUND_TITLE, null)
-        val sounds = mutableListOf(
+        val sounds = listOf(
             "هشدار پیش‌فرض",
             "هشدار شدید",
             "هشدار کوتاه",
@@ -154,13 +157,9 @@ class MainActivity : AppCompatActivity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 when (position) {
                     3 -> {
-                        val picker = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار")
-                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        if (!suppressSoundPicker) {
+                            openSoundPicker()
                         }
-                        startActivityForResult(picker, REQUEST_SOUND)
                     }
                     else -> {
                         prefs.edit()
@@ -171,8 +170,21 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
+
+        suppressSoundPicker = false
+    }
+
+    private fun openSoundPicker() {
+        val picker = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+        }
+        startActivityForResult(picker, REQUEST_SOUND)
     }
 
     @Deprecated("Android activity result API is retained for compatibility with the project's current structure")
@@ -183,6 +195,7 @@ class MainActivity : AppCompatActivity() {
         val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI) ?: return
         val title = data.getStringExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_TITLE) ?: "صدای انتخاب‌شده"
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+
         prefs.edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
             .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
@@ -190,7 +203,9 @@ class MainActivity : AppCompatActivity() {
             .apply()
 
         setupSoundSpinner()
+        suppressSoundPicker = true
         soundSpinner.setSelection(3)
+        suppressSoundPicker = false
     }
 
     private fun toggleMonitoring() {
