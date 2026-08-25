@@ -10,7 +10,6 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- عنوان برنامه -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -28,7 +27,6 @@
             android:gravity="center"
             android:layout_marginBottom="20dp" />
 
-        <!-- وضعیت پایش -->
         <TextView
             android:id="@+id/monitoringStatusText"
             android:layout_width="match_parent"
@@ -40,7 +38,6 @@
             android:gravity="center"
             android:layout_marginBottom="10dp" />
 
-        <!-- دکمه فعال / غیرفعال -->
         <Button
             android:id="@+id/monitoringButton"
             android:layout_width="match_parent"
@@ -49,7 +46,6 @@
             android:textSize="16sp"
             android:layout_marginBottom="24dp" />
 
-        <!-- قیمت مبنا -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -76,7 +72,6 @@
             android:layout_marginTop="4dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- میزان کاهش هشدار -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -100,7 +95,6 @@
             android:gravity="center"
             android:layout_marginBottom="18dp" />
 
-        <!-- حد ریزش -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -120,7 +114,6 @@
             android:layout_marginTop="6dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- قیمت لحظه ای -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -140,7 +133,6 @@
             android:layout_marginTop="6dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- صدای هشدار -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -160,9 +152,16 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:text="آزمایش صدای انتخاب‌شده"
+            android:layout_marginBottom="18dp" />
+
+        <Button
+            android:id="@+id/alertPreviewButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="آزمایش صفحه هشدار"
+            android:textSize="16sp"
             android:layout_marginBottom="24dp" />
 
-        <!-- وضعیت اتصال -->
         <TextView
             android:id="@+id/connectionText"
             android:layout_width="match_parent"
@@ -174,7 +173,6 @@
             android:gravity="center"
             android:layout_marginBottom="10dp" />
 
-        <!-- زمان آخرین دریافت -->
         <TextView
             android:id="@+id/updateText"
             android:layout_width="match_parent"
