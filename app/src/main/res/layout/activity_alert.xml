@@ -64,15 +64,7 @@
         android:id="@+id/acknowledgeButton"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="هشدار مشاهده شد"
-        android:textSize="17sp"
-        android:layout_marginBottom="12dp" />
-
-    <Button
-        android:id="@+id/delayedButton"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="هشدار با تأخیر مشاهده شد"
+        android:text="مشاهده هشدار"
         android:textSize="17sp" />
 
 </LinearLayout>
