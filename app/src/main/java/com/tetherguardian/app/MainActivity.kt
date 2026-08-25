@@ -6,13 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.database.Cursor
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
-import android.provider.OpenableColumns
 import android.provider.Settings
+import android.view.MotionEvent
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -57,281 +57,1087 @@ class MainActivity : AppCompatActivity() {
     private lateinit var alertPreviewButton: Button
 
     private var settingUpSoundSelector = false
+
     private val nobitexApi = NobitexApi()
+
     private val decimalFormat = DecimalFormat("#,##0.########")
     private val integerPriceFormat = DecimalFormat("#,##0")
+
     private val dropOptions = (1..10).map { it * 0.5 }
 
     private val priceReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != MonitoringService.ACTION_PRICE_UPDATE) return
-            val price = intent.getDoubleExtra(MonitoringService.EXTRA_PRICE, 0.0)
-            val base = intent.getDoubleExtra(MonitoringService.EXTRA_BASE_PRICE, 0.0)
-            val baseTime = intent.getLongExtra(MonitoringService.EXTRA_BASE_TIME, 0L)
-            val receivedTime = intent.getLongExtra(MonitoringService.EXTRA_TIME, 0L)
-            val dropLimit = intent.getDoubleExtra(MonitoringService.EXTRA_DROP_LIMIT, 0.0)
-            if (price > 0) {
-                priceText.text = formatPrice(price)
-                connectionText.text = "● اتصال موفق به نوبیتکس"
-                connectionText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
+
+        override fun onReceive(
+            context: Context?,
+            intent: Intent?
+        ) {
+
+            if (intent?.action != MonitoringService.ACTION_PRICE_UPDATE) {
+                return
             }
-            if (base > 0) baseText.text = formatPrice(base)
-            if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
-            if (dropLimit > 0) dropLimitText.text = formatRoundedPrice(dropLimit)
-            if (receivedTime > 0) updateText.text = "آخرین دریافت: ${formatTime(receivedTime)}"
+
+            val price =
+                intent.getDoubleExtra(
+                    MonitoringService.EXTRA_PRICE,
+                    0.0
+                )
+
+            val base =
+                intent.getDoubleExtra(
+                    MonitoringService.EXTRA_BASE_PRICE,
+                    0.0
+                )
+
+            val baseTime =
+                intent.getLongExtra(
+                    MonitoringService.EXTRA_BASE_TIME,
+                    0L
+                )
+
+            val receivedTime =
+                intent.getLongExtra(
+                    MonitoringService.EXTRA_TIME,
+                    0L
+                )
+
+            val dropLimit =
+                intent.getDoubleExtra(
+                    MonitoringService.EXTRA_DROP_LIMIT,
+                    0.0
+                )
+
+            if (price > 0) {
+
+                priceText.text = formatPrice(price)
+
+                connectionText.text =
+                    "● اتصال موفق به نوبیتکس"
+
+                connectionText.setTextColor(
+                    getColorCompat(
+                        android.R.color.holo_green_dark
+                    )
+                )
+            }
+
+            if (base > 0) {
+                baseText.text = formatPrice(base)
+            }
+
+            if (baseTime > 0) {
+
+                baseTimeText.text =
+                    "زمان ثبت: ${formatTime(baseTime)}"
+            }
+
+            if (dropLimit > 0) {
+
+                dropLimitText.text =
+                    formatRoundedPrice(dropLimit)
+            }
+
+            if (receivedTime > 0) {
+
+                updateText.text =
+                    "آخرین دریافت: ${formatTime(receivedTime)}"
+            }
+
             setMonitoringActiveAppearance()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_main)
+
         initializeViews()
+
         setupDropPercentSpinner()
+
         setupSoundSpinner()
+
         registerPriceReceiver()
+
         restoreMonitoringState()
-        monitoringButton.setOnClickListener { toggleMonitoring() }
-        soundTestButton.setOnClickListener { testSelectedSound() }
-        alertPreviewButton.setOnClickListener { previewAlertScreen() }
+
+        monitoringButton.setOnClickListener {
+            toggleMonitoring()
+        }
+
+        soundTestButton.setOnClickListener {
+            testSelectedSound()
+        }
+
+        alertPreviewButton.setOnClickListener {
+            previewAlertScreen()
+        }
+
         loadCurrentPrice()
     }
 
     private fun initializeViews() {
-        connectionText = findViewById(R.id.connectionText)
-        priceText = findViewById(R.id.priceText)
-        updateText = findViewById(R.id.updateText)
-        baseText = findViewById(R.id.baseText)
-        baseTimeText = findViewById(R.id.baseTimeText)
-        dropPercentText = findViewById(R.id.dropPercentText)
-        dropLimitText = findViewById(R.id.dropLimitText)
-        monitoringStatusText = findViewById(R.id.monitoringStatusText)
-        monitoringButton = findViewById(R.id.monitoringButton)
-        dropPercentSpinner = findViewById(R.id.dropPercentSpinner)
-        soundSpinner = findViewById(R.id.soundSpinner)
-        soundTestButton = findViewById(R.id.soundTestButton)
-        alertPreviewButton = findViewById(R.id.alertPreviewButton)
+
+        connectionText =
+            findViewById(R.id.connectionText)
+
+        priceText =
+            findViewById(R.id.priceText)
+
+        updateText =
+            findViewById(R.id.updateText)
+
+        baseText =
+            findViewById(R.id.baseText)
+
+        baseTimeText =
+            findViewById(R.id.baseTimeText)
+
+        dropPercentText =
+            findViewById(R.id.dropPercentText)
+
+        dropLimitText =
+            findViewById(R.id.dropLimitText)
+
+        monitoringStatusText =
+            findViewById(R.id.monitoringStatusText)
+
+        monitoringButton =
+            findViewById(R.id.monitoringButton)
+
+        dropPercentSpinner =
+            findViewById(R.id.dropPercentSpinner)
+
+        soundSpinner =
+            findViewById(R.id.soundSpinner)
+
+        soundTestButton =
+            findViewById(R.id.soundTestButton)
+
+        alertPreviewButton =
+            findViewById(R.id.alertPreviewButton)
     }
 
     private fun setupDropPercentSpinner() {
-        val labels = dropOptions.map { formatPercent(it) }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, labels)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        dropPercentSpinner.adapter = adapter
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val savedPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
-        val savedIndex = dropOptions.indexOfFirst { abs(it - savedPercent) < 0.001 }
-        if (savedIndex >= 0) dropPercentSpinner.setSelection(savedIndex)
-        dropPercentSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val selected = dropOptions.getOrNull(position) ?: 3.0
-                dropPercentText.text = formatPercent(selected)
-                prefs.edit().putString(MonitoringService.KEY_DROP_PERCENT, selected.toString()).apply()
-                updateDropLimit(selected)
+
+        val labels =
+            dropOptions.map {
+                formatPercent(it)
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+
+        val adapter =
+            ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_item,
+                labels
+            )
+
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item
+        )
+
+        dropPercentSpinner.adapter = adapter
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val savedPercent =
+            prefs.getString(
+                MonitoringService.KEY_DROP_PERCENT,
+                "3.0"
+            )?.toDoubleOrNull() ?: 3.0
+
+        val savedIndex =
+            dropOptions.indexOfFirst {
+                abs(it - savedPercent) < 0.001
+            }
+
+        if (savedIndex >= 0) {
+
+            dropPercentSpinner.setSelection(
+                savedIndex
+            )
         }
-        val initial = dropOptions.getOrNull(if (savedIndex >= 0) savedIndex else 5) ?: 3.0
-        dropPercentText.text = formatPercent(initial)
+
+        dropPercentSpinner.onItemSelectedListener =
+            object : AdapterView.OnItemSelectedListener {
+
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+
+                    val selected =
+                        dropOptions.getOrNull(position)
+                            ?: 3.0
+
+                    dropPercentText.text =
+                        formatPercent(selected)
+
+                    prefs.edit()
+                        .putString(
+                            MonitoringService.KEY_DROP_PERCENT,
+                            selected.toString()
+                        )
+                        .apply()
+
+                    updateDropLimit(selected)
+                }
+
+                override fun onNothingSelected(
+                    parent: AdapterView<*>?
+                ) {
+                }
+            }
+
+        val initial =
+            dropOptions.getOrNull(
+                if (savedIndex >= 0) {
+                    savedIndex
+                } else {
+                    5
+                }
+            ) ?: 3.0
+
+        dropPercentText.text =
+            formatPercent(initial)
     }
 
+    /*
+     * انتخاب صدای هشدار
+     *
+     * این قسمت دیگر فایل منیجر عمومی را باز نمی‌کند.
+     * مستقیماً از انتخاب‌گر صدای سیستم Android استفاده می‌شود.
+     */
     private fun setupSoundSpinner() {
+
         settingUpSoundSelector = true
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val customTitle = prefs.getString(MonitoringService.KEY_SOUND_TITLE, null)
-        val label = if (customTitle.isNullOrBlank()) "انتخاب صدای هشدار از گوشی" else "صدای انتخاب‌شده: $customTitle"
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf(label))
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val customTitle =
+            prefs.getString(
+                MonitoringService.KEY_SOUND_TITLE,
+                null
+            )
+
+        val label =
+            if (customTitle.isNullOrBlank()) {
+                "انتخاب صدای هشدار از گوشی"
+            } else {
+                "صدای انتخاب‌شده: $customTitle"
+            }
+
+        val adapter =
+            ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_item,
+                listOf(label)
+            )
+
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item
+        )
+
         soundSpinner.adapter = adapter
-        soundSpinner.setSelection(0, false)
+
+        soundSpinner.setSelection(
+            0,
+            false
+        )
+
+        /*
+         * Spinner دیگر خودش هیچ منوی اضافه‌ای باز نمی‌کند.
+         * لمس آن مستقیماً انتخاب‌گر صدای سیستم را باز می‌کند.
+         */
         soundSpinner.setOnTouchListener { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_UP && !settingUpSoundSelector) {
+
+            if (
+                event.action == MotionEvent.ACTION_UP &&
+                !settingUpSoundSelector
+            ) {
+
                 openSoundPicker()
-                true
-            } else true
+            }
+
+            true
         }
+
         settingUpSoundSelector = false
     }
 
     private fun openSoundPicker() {
-        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "audio/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val currentUri =
+            prefs.getString(
+                MonitoringService.KEY_SOUND_URI,
+                null
+            )?.let {
+                Uri.parse(it)
+            }
+
+        /*
+         * مهم:
+         *
+         * از TYPE_NOTIFICATION استفاده می‌کنیم تا
+         * انتخاب‌گر صدای سیستم، صداهای مناسب اعلان
+         * و هشدار را نمایش دهد.
+         */
+        val picker =
+            Intent(
+                RingtoneManager.ACTION_RINGTONE_PICKER
+            ).apply {
+
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_TYPE,
+                    RingtoneManager.TYPE_NOTIFICATION
+                )
+
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_TITLE,
+                    "انتخاب صدای هشدار"
+                )
+
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT,
+                    false
+                )
+
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,
+                    false
+                )
+
+                if (currentUri != null) {
+
+                    putExtra(
+                        RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                        currentUri
+                    )
+                }
+            }
+
+        try {
+
+            startActivityForResult(
+                picker,
+                REQUEST_SOUND
+            )
+
+        } catch (_: Exception) {
+
+            /*
+             * فقط در صورتی که گوشی انتخاب‌گر سیستم
+             * را نداشته باشد، مسیر جایگزین استفاده می‌شود.
+             *
+             * در حالت عادی اصلاً به این قسمت نمی‌رسیم.
+             */
+            val fallback =
+                Intent(
+                    Intent.ACTION_OPEN_DOCUMENT
+                ).apply {
+
+                    addCategory(
+                        Intent.CATEGORY_OPENABLE
+                    )
+
+                    type = "audio/*"
+
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+
+                    addFlags(
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                    )
+                }
+
+            startActivityForResult(
+                fallback,
+                REQUEST_SOUND
+            )
         }
-        startActivityForResult(picker, REQUEST_SOUND)
     }
 
-    @Deprecated("Android activity result API is retained for compatibility with the project's current structure")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
-        val uri = data?.data ?: return
-        try {
-            val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-            if (takeFlags != 0) contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (_: Exception) { }
-        val title = getDisplayName(uri) ?: "صدای انتخاب‌شده"
-        getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit()
-            .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
-            .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
-            .putString(MonitoringService.KEY_SOUND_TITLE, title)
+    @Deprecated(
+        "Android activity result API is retained for compatibility"
+    )
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        )
+
+        if (
+            requestCode != REQUEST_SOUND ||
+            resultCode != RESULT_OK
+        ) {
+            return
+        }
+
+        val uri =
+            data?.getParcelableExtra<Uri>(
+                RingtoneManager.EXTRA_RINGTONE_PICKED_URI
+            )
+                ?: data?.data
+                ?: return
+
+        val title =
+            try {
+
+                RingtoneManager
+                    .getRingtone(
+                        this,
+                        uri
+                    )
+                    ?.getTitle(this)
+
+            } catch (_: Exception) {
+
+                null
+            }
+                ?: "صدای انتخاب‌شده"
+
+        /*
+         * ذخیره URI و نام صدا
+         */
+        getSharedPreferences(
+            MonitoringService.PREFS_NAME,
+            MODE_PRIVATE
+        )
+            .edit()
+            .putInt(
+                MonitoringService.KEY_SOUND_INDEX,
+                3
+            )
+            .putString(
+                MonitoringService.KEY_SOUND_URI,
+                uri.toString()
+            )
+            .putString(
+                MonitoringService.KEY_SOUND_TITLE,
+                title
+            )
             .apply()
+
         setupSoundSpinner()
     }
 
-    private fun getDisplayName(uri: Uri): String? {
-        var cursor: Cursor? = null
-        return try {
-            cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            if (cursor != null && cursor.moveToFirst()) cursor.getString(0) else null
-        } catch (_: Exception) { null } finally { cursor?.close() }
-    }
-
     private fun previewAlertScreen() {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val currentPrice = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull() ?: 0.0
-        val dropPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull() ?: 0.5
-        val base = if (currentPrice > 0.0) currentPrice else 100_000.0
-        val previewPrice = base * (1.0 - dropPercent / 100.0)
-        startActivity(Intent(this, AlertActivity::class.java).apply {
-            putExtra(MonitoringService.EXTRA_ALERT_PRICE, previewPrice)
-            putExtra(MonitoringService.EXTRA_ALERT_BASE, base)
-            putExtra(MonitoringService.EXTRA_ALERT_DROP, -dropPercent)
-            putExtra("preview_mode", true)
-        })
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val currentPrice =
+            prefs.getString(
+                MonitoringService.KEY_BASE_PRICE,
+                null
+            )?.toDoubleOrNull() ?: 0.0
+
+        val dropPercent =
+            prefs.getString(
+                MonitoringService.KEY_DROP_PERCENT,
+                "0.5"
+            )?.toDoubleOrNull() ?: 0.5
+
+        val base =
+            if (currentPrice > 0.0) {
+                currentPrice
+            } else {
+                100_000.0
+            }
+
+        val previewPrice =
+            base * (
+                1.0 - dropPercent / 100.0
+            )
+
+        startActivity(
+            Intent(
+                this,
+                AlertActivity::class.java
+            ).apply {
+
+                putExtra(
+                    MonitoringService.EXTRA_ALERT_PRICE,
+                    previewPrice
+                )
+
+                putExtra(
+                    MonitoringService.EXTRA_ALERT_BASE,
+                    base
+                )
+
+                putExtra(
+                    MonitoringService.EXTRA_ALERT_DROP,
+                    -dropPercent
+                )
+
+                putExtra(
+                    "preview_mode",
+                    true
+                )
+            }
+        )
     }
 
     private fun toggleMonitoring() {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val active =
+            prefs.getBoolean(
+                MonitoringService.KEY_ACTIVE,
+                false
+            )
+
         if (active) {
-            ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_STOP))
+
+            ContextCompat.startForegroundService(
+                this,
+                Intent(
+                    this,
+                    MonitoringService::class.java
+                ).setAction(
+                    MonitoringService.ACTION_STOP
+                )
+            )
+
             setMonitoringInactiveAppearance()
+
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
+
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ),
+                    2001
+                )
             }
-            val selected = dropOptions.getOrNull(dropPercentSpinner.selectedItemPosition) ?: 3.0
-            prefs.edit().putString(MonitoringService.KEY_DROP_PERCENT, selected.toString()).apply()
-            ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_START))
-            monitoringStatusText.text = "● در حال فعال‌سازی..."
-            monitoringStatusText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
-            monitoringButton.text = "غیرفعال کردن برنامه"
+
+            val selected =
+                dropOptions.getOrNull(
+                    dropPercentSpinner.selectedItemPosition
+                ) ?: 3.0
+
+            prefs.edit()
+                .putString(
+                    MonitoringService.KEY_DROP_PERCENT,
+                    selected.toString()
+                )
+                .apply()
+
+            ContextCompat.startForegroundService(
+                this,
+                Intent(
+                    this,
+                    MonitoringService::class.java
+                ).setAction(
+                    MonitoringService.ACTION_START
+                )
+            )
+
+            monitoringStatusText.text =
+                "● در حال فعال‌سازی..."
+
+            monitoringStatusText.setTextColor(
+                getColorCompat(
+                    android.R.color.holo_green_dark
+                )
+            )
+
+            monitoringButton.text =
+                "غیرفعال کردن برنامه"
+
             maybePromptBatteryOptimization()
         }
     }
 
     private fun maybePromptBatteryOptimization() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) return
-        val powerManager = getSystemService(PowerManager::class.java)
-        if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+
+        if (
+            Build.VERSION.SDK_INT <
+            Build.VERSION_CODES.M
+        ) {
             return
         }
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        if (
+            prefs.getBoolean(
+                PREF_BATTERY_PROMPT_SHOWN,
+                false
+            )
+        ) {
+            return
+        }
+
+        val powerManager =
+            getSystemService(
+                PowerManager::class.java
+            )
+
+        if (
+            powerManager.isIgnoringBatteryOptimizations(
+                packageName
+            )
+        ) {
+
+            prefs.edit()
+                .putBoolean(
+                    PREF_BATTERY_PROMPT_SHOWN,
+                    true
+                )
+                .apply()
+
+            return
+        }
+
         AlertDialog.Builder(this)
-            .setTitle("پایداری پایش تتر")
-            .setMessage("برای اطمینان از ادامه پایش قیمت و اجرای هشدار در پس‌زمینه، پیشنهاد می‌شود «نگهبان تتر» را از بهینه‌سازی مصرف باتری مستثنی کنید. در صورت فعال‌سازی این گزینه، احتمال توقف برنامه در پس‌زمینه کمتر می‌شود.")
-            .setPositiveButton("باز کردن تنظیمات باتری") { _, _ ->
+
+            .setTitle(
+                "پایداری پایش تتر"
+            )
+
+            .setMessage(
+                "برای اطمینان از ادامه پایش قیمت و اجرای هشدار در پس‌زمینه، پیشنهاد می‌شود «نگهبان تتر» را از بهینه‌سازی مصرف باتری مستثنی کنید. در صورت فعال‌سازی این گزینه، احتمال توقف برنامه در پس‌زمینه کمتر می‌شود."
+            )
+
+            .setPositiveButton(
+                "باز کردن تنظیمات باتری"
+            ) { _, _ ->
+
                 try {
-                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                    })
+
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                        ).apply {
+
+                            data =
+                                Uri.parse(
+                                    "package:$packageName"
+                                )
+                        }
+                    )
+
                 } catch (_: Exception) {
-                    try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) { }
+
+                    try {
+
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                            )
+                        )
+
+                    } catch (_: Exception) {
+                    }
                 }
-                prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+
+                prefs.edit()
+                    .putBoolean(
+                        PREF_BATTERY_PROMPT_SHOWN,
+                        true
+                    )
+                    .apply()
             }
-            .setNegativeButton("بعداً") { _, _ ->
-                prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+
+            .setNegativeButton(
+                "بعداً"
+            ) { _, _ ->
+
+                prefs.edit()
+                    .putBoolean(
+                        PREF_BATTERY_PROMPT_SHOWN,
+                        true
+                    )
+                    .apply()
             }
+
             .setCancelable(false)
             .show()
     }
 
     private fun restoreMonitoringState() {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
-        val savedPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
-        dropPercentText.text = formatPercent(savedPercent)
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val active =
+            prefs.getBoolean(
+                MonitoringService.KEY_ACTIVE,
+                false
+            )
+
+        val savedPercent =
+            prefs.getString(
+                MonitoringService.KEY_DROP_PERCENT,
+                "3.0"
+            )?.toDoubleOrNull() ?: 3.0
+
+        dropPercentText.text =
+            formatPercent(savedPercent)
+
         if (active) {
+
             setMonitoringActiveAppearance()
-            val base = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)
-            val baseTime = prefs.getLong(MonitoringService.KEY_BASE_TIME, 0L)
-            if (base != null) baseText.text = formatPrice(base.toDouble())
-            if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
-            updateDropLimit(savedPercent)
-        } else setMonitoringInactiveAppearance()
+
+            val base =
+                prefs.getString(
+                    MonitoringService.KEY_BASE_PRICE,
+                    null
+                )
+
+            val baseTime =
+                prefs.getLong(
+                    MonitoringService.KEY_BASE_TIME,
+                    0L
+                )
+
+            if (base != null) {
+
+                baseText.text =
+                    formatPrice(
+                        base.toDouble()
+                    )
+            }
+
+            if (baseTime > 0) {
+
+                baseTimeText.text =
+                    "زمان ثبت: ${formatTime(baseTime)}"
+            }
+
+            updateDropLimit(
+                savedPercent
+            )
+
+        } else {
+
+            setMonitoringInactiveAppearance()
+        }
     }
 
     private fun setMonitoringActiveAppearance() {
-        monitoringStatusText.text = "● پایش فعال"
-        monitoringStatusText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
-        monitoringButton.text = "غیرفعال کردن برنامه"
+
+        monitoringStatusText.text =
+            "● پایش فعال"
+
+        monitoringStatusText.setTextColor(
+            getColorCompat(
+                android.R.color.holo_green_dark
+            )
+        )
+
+        monitoringButton.text =
+            "غیرفعال کردن برنامه"
     }
 
     private fun setMonitoringInactiveAppearance() {
-        monitoringStatusText.text = "● پایش غیرفعال"
-        monitoringStatusText.setTextColor(getColorCompat(android.R.color.holo_red_dark))
-        monitoringButton.text = "فعال کردن برنامه"
-        baseText.text = "--"
-        baseTimeText.text = "زمان ثبت: --"
-        dropLimitText.text = "--"
+
+        monitoringStatusText.text =
+            "● پایش غیرفعال"
+
+        monitoringStatusText.setTextColor(
+            getColorCompat(
+                android.R.color.holo_red_dark
+            )
+        )
+
+        monitoringButton.text =
+            "فعال کردن برنامه"
+
+        baseText.text =
+            "--"
+
+        baseTimeText.text =
+            "زمان ثبت: --"
+
+        dropLimitText.text =
+            "--"
     }
 
-    private fun updateDropLimit(percent: Double) {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val base = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull()
-        if (base != null && base > 0) dropLimitText.text = formatRoundedPrice(base * (1.0 - percent / 100.0)) else dropLimitText.text = "--"
+    private fun updateDropLimit(
+        percent: Double
+    ) {
+
+        val prefs =
+            getSharedPreferences(
+                MonitoringService.PREFS_NAME,
+                MODE_PRIVATE
+            )
+
+        val base =
+            prefs.getString(
+                MonitoringService.KEY_BASE_PRICE,
+                null
+            )?.toDoubleOrNull()
+
+        if (
+            base != null &&
+            base > 0
+        ) {
+
+            dropLimitText.text =
+                formatRoundedPrice(
+                    base *
+                        (
+                            1.0 -
+                                percent / 100.0
+                        )
+                )
+
+        } else {
+
+            dropLimitText.text =
+                "--"
+        }
     }
 
     private fun loadCurrentPrice() {
-        connectionText.text = "● در حال اتصال..."
-        connectionText.setTextColor(getColorCompat(android.R.color.holo_orange_dark))
-        CoroutineScope(Dispatchers.Main).launch {
+
+        connectionText.text =
+            "● در حال اتصال..."
+
+        connectionText.setTextColor(
+            getColorCompat(
+                android.R.color.holo_orange_dark
+            )
+        )
+
+        CoroutineScope(
+            Dispatchers.Main
+        ).launch {
+
             try {
-                val price = withContext(Dispatchers.IO) { nobitexApi.getCurrentPrice(symbol = "USDTIRT") }
-                priceText.text = formatPrice(price)
-                connectionText.text = "● اتصال موفق به نوبیتکس"
-                connectionText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
-                updateText.text = "آخرین دریافت: ${currentTime()}"
+
+                val price =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
+
+                        nobitexApi.getCurrentPrice(
+                            symbol = "USDTIRT"
+                        )
+                    }
+
+                priceText.text =
+                    formatPrice(price)
+
+                connectionText.text =
+                    "● اتصال موفق به نوبیتکس"
+
+                connectionText.setTextColor(
+                    getColorCompat(
+                        android.R.color.holo_green_dark
+                    )
+                )
+
+                updateText.text =
+                    "آخرین دریافت: ${currentTime()}"
+
             } catch (e: Exception) {
-                connectionText.text = "● اتصال ناموفق به نوبیتکس"
-                connectionText.setTextColor(getColorCompat(android.R.color.holo_red_dark))
-                updateText.text = e.message ?: "خطای نامشخص"
+
+                connectionText.text =
+                    "● اتصال ناموفق به نوبیتکس"
+
+                connectionText.setTextColor(
+                    getColorCompat(
+                        android.R.color.holo_red_dark
+                    )
+                )
+
+                updateText.text =
+                    e.message
+                        ?: "خطای نامشخص"
             }
         }
     }
 
     private fun testSelectedSound() {
-        ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_TEST_SOUND))
+
+        ContextCompat.startForegroundService(
+            this,
+            Intent(
+                this,
+                MonitoringService::class.java
+            ).setAction(
+                MonitoringService.ACTION_TEST_SOUND
+            )
+        )
     }
 
     private fun registerPriceReceiver() {
-        val filter = IntentFilter(MonitoringService.ACTION_PRICE_UPDATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(priceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        else registerReceiver(priceReceiver, filter)
+
+        val filter =
+            IntentFilter(
+                MonitoringService.ACTION_PRICE_UPDATE
+            )
+
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.TIRAMISU
+        ) {
+
+            registerReceiver(
+                priceReceiver,
+                filter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+
+        } else {
+
+            registerReceiver(
+                priceReceiver,
+                filter
+            )
+        }
     }
 
     override fun onDestroy() {
-        try { unregisterReceiver(priceReceiver) } catch (_: Exception) { }
+
+        try {
+
+            unregisterReceiver(
+                priceReceiver
+            )
+
+        } catch (_: Exception) {
+        }
+
         super.onDestroy()
     }
 
-    private fun formatPrice(value: String): String = value.toDoubleOrNull()?.let { formatPrice(it) } ?: value
-    private fun formatPrice(value: Double): String = decimalFormat.format(value) + " تومان"
-    private fun formatRoundedPrice(value: Double): String = integerPriceFormat.format(round(value)) + " تومان"
-    private fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
-    private fun currentTime(): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-    private fun formatTime(timestamp: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
+    private fun formatPrice(
+        value: String
+    ): String {
 
-    private fun getColorCompat(colorRes: Int): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) getColor(colorRes) else {
+        return value
+            .toDoubleOrNull()
+            ?.let {
+                formatPrice(it)
+            }
+            ?: value
+    }
+
+    private fun formatPrice(
+        value: Double
+    ): String {
+
+        return decimalFormat.format(
+            value
+        ) + " تومان"
+    }
+
+    private fun formatRoundedPrice(
+        value: Double
+    ): String {
+
+        return integerPriceFormat.format(
+            round(value)
+        ) + " تومان"
+    }
+
+    private fun formatPercent(
+        value: Double
+    ): String {
+
+        return String.format(
+            Locale.US,
+            "%.1f%%",
+            value
+        )
+    }
+
+    private fun currentTime(): String {
+
+        return SimpleDateFormat(
+            "HH:mm:ss",
+            Locale.getDefault()
+        ).format(
+            Date()
+        )
+    }
+
+    private fun formatTime(
+        timestamp: Long
+    ): String {
+
+        return SimpleDateFormat(
+            "HH:mm:ss",
+            Locale.getDefault()
+        ).format(
+            Date(timestamp)
+        )
+    }
+
+    private fun getColorCompat(
+        colorRes: Int
+    ): Int {
+
+        return if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.M
+        ) {
+
+            getColor(
+                colorRes
+            )
+
+        } else {
+
             @Suppress("DEPRECATION")
-            resources.getColor(colorRes)
+            resources.getColor(
+                colorRes
+            )
         }
     }
 }
