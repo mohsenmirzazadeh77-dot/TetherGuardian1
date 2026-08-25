@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dropPercentSpinner: Spinner
     private lateinit var soundSpinner: Spinner
     private lateinit var soundTestButton: Button
+    private lateinit var alertPreviewButton: Button
 
     private var settingUpSoundSelector = false
 
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
 
         monitoringButton.setOnClickListener { toggleMonitoring() }
         soundTestButton.setOnClickListener { testSelectedSound() }
+        alertPreviewButton.setOnClickListener { previewAlertScreen() }
         loadCurrentPrice()
     }
 
@@ -108,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         dropPercentSpinner = findViewById(R.id.dropPercentSpinner)
         soundSpinner = findViewById(R.id.soundSpinner)
         soundTestButton = findViewById(R.id.soundTestButton)
+        alertPreviewButton = findViewById(R.id.alertPreviewButton)
     }
 
     private fun setupDropPercentSpinner() {
@@ -135,45 +138,22 @@ class MainActivity : AppCompatActivity() {
         dropPercentText.text = formatPercent(initial)
     }
 
-    /**
-     * There is deliberately only one sound option now: a sound selected by the user
-     * from the phone. The old three built-in options are removed from the UI.
-     *
-     * Important: setup/restore never opens the picker. The picker opens only when
-     * the user deliberately touches this selector. This prevents the sound picker
-     * from reopening when MainActivity is opened from the notification.
-     */
     private fun setupSoundSpinner() {
         settingUpSoundSelector = true
-
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val customTitle = prefs.getString(MonitoringService.KEY_SOUND_TITLE, null)
-        val label = if (customTitle.isNullOrBlank()) {
-            "انتخاب صدای هشدار از گوشی"
-        } else {
-            "صدای انتخاب‌شده: $customTitle"
-        }
+        val label = if (customTitle.isNullOrBlank()) "انتخاب صدای هشدار از گوشی" else "صدای انتخاب‌شده: $customTitle"
 
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_item,
-            listOf(label)
-        )
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf(label))
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         soundSpinner.adapter = adapter
         soundSpinner.setSelection(0, false)
-
-        // Do not use onItemSelected to launch the picker: Android may call it
-        // automatically during Activity creation/restoration.
         soundSpinner.setOnTouchListener { _, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP && !settingUpSoundSelector) {
                 openSoundPicker()
                 true
-            } else {
-                true
-            }
+            } else true
         }
-
         settingUpSoundSelector = false
     }
 
@@ -191,25 +171,20 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK) return
-
         val uri = data?.data ?: return
 
         try {
             val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-            if (takeFlags != 0) {
-                contentResolver.takePersistableUriPermission(uri, takeFlags)
-            }
+            if (takeFlags != 0) contentResolver.takePersistableUriPermission(uri, takeFlags)
         } catch (_: Exception) {
         }
 
         val title = getDisplayName(uri) ?: "صدای انتخاب‌شده"
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        prefs.edit()
+        getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit()
             .putInt(MonitoringService.KEY_SOUND_INDEX, 3)
             .putString(MonitoringService.KEY_SOUND_URI, uri.toString())
             .putString(MonitoringService.KEY_SOUND_TITLE, title)
             .apply()
-
         setupSoundSpinner()
     }
 
@@ -217,11 +192,7 @@ class MainActivity : AppCompatActivity() {
         var cursor: Cursor? = null
         return try {
             cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            if (cursor != null && cursor.moveToFirst()) {
-                cursor.getString(0)
-            } else {
-                null
-            }
+            if (cursor != null && cursor.moveToFirst()) cursor.getString(0) else null
         } catch (_: Exception) {
             null
         } finally {
@@ -229,30 +200,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun previewAlertScreen() {
+        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
+        val currentPrice = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull()
+            ?: 0.0
+        val dropPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "0.5")?.toDoubleOrNull()
+            ?: 0.5
+        val base = if (currentPrice > 0.0) currentPrice else 100_000.0
+        val previewPrice = base * (1.0 - dropPercent / 100.0)
+        val previewDrop = -dropPercent
+
+        startActivity(
+            Intent(this, AlertActivity::class.java).apply {
+                putExtra(MonitoringService.EXTRA_ALERT_PRICE, previewPrice)
+                putExtra(MonitoringService.EXTRA_ALERT_BASE, base)
+                putExtra(MonitoringService.EXTRA_ALERT_DROP, previewDrop)
+                putExtra("preview_mode", true)
+            }
+        )
+    }
+
     private fun toggleMonitoring() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
 
         if (active) {
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_STOP)
-            )
+            ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_STOP))
             setMonitoringInactiveAppearance()
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
             }
-
             val selected = dropOptions.getOrNull(dropPercentSpinner.selectedItemPosition) ?: 3.0
             prefs.edit().putString(MonitoringService.KEY_DROP_PERCENT, selected.toString()).apply()
-
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_START)
-            )
-
+            ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_START))
             monitoringStatusText.text = "● در حال فعال‌سازی..."
             monitoringStatusText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
             monitoringButton.text = "غیرفعال کردن برنامه"
@@ -264,7 +246,6 @@ class MainActivity : AppCompatActivity() {
         val active = prefs.getBoolean(MonitoringService.KEY_ACTIVE, false)
         val savedPercent = prefs.getString(MonitoringService.KEY_DROP_PERCENT, "3.0")?.toDoubleOrNull() ?: 3.0
         dropPercentText.text = formatPercent(savedPercent)
-
         if (active) {
             setMonitoringActiveAppearance()
             val base = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)
@@ -272,9 +253,7 @@ class MainActivity : AppCompatActivity() {
             if (base != null) baseText.text = formatPrice(base.toDouble())
             if (baseTime > 0) baseTimeText.text = "زمان ثبت: ${formatTime(baseTime)}"
             updateDropLimit(savedPercent)
-        } else {
-            setMonitoringInactiveAppearance()
-        }
+        } else setMonitoringInactiveAppearance()
     }
 
     private fun setMonitoringActiveAppearance() {
@@ -295,23 +274,15 @@ class MainActivity : AppCompatActivity() {
     private fun updateDropLimit(percent: Double) {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val base = prefs.getString(MonitoringService.KEY_BASE_PRICE, null)?.toDoubleOrNull()
-        if (base != null && base > 0) {
-            val limit = base * (1.0 - percent / 100.0)
-            dropLimitText.text = formatRoundedPrice(limit)
-        } else {
-            dropLimitText.text = "--"
-        }
+        if (base != null && base > 0) dropLimitText.text = formatRoundedPrice(base * (1.0 - percent / 100.0)) else dropLimitText.text = "--"
     }
 
     private fun loadCurrentPrice() {
         connectionText.text = "● در حال اتصال..."
         connectionText.setTextColor(getColorCompat(android.R.color.holo_orange_dark))
-
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                val price = withContext(Dispatchers.IO) {
-                    nobitexApi.getCurrentPrice(symbol = "USDTIRT")
-                }
+                val price = withContext(Dispatchers.IO) { nobitexApi.getCurrentPrice(symbol = "USDTIRT") }
                 priceText.text = formatPrice(price)
                 connectionText.text = "● اتصال موفق به نوبیتکس"
                 connectionText.setTextColor(getColorCompat(android.R.color.holo_green_dark))
@@ -325,48 +296,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun testSelectedSound() {
-        ContextCompat.startForegroundService(
-            this,
-            Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_TEST_SOUND)
-        )
+        ContextCompat.startForegroundService(this, Intent(this, MonitoringService::class.java).setAction(MonitoringService.ACTION_TEST_SOUND))
     }
 
     private fun registerPriceReceiver() {
         val filter = IntentFilter(MonitoringService.ACTION_PRICE_UPDATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(priceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(priceReceiver, filter)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(priceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(priceReceiver, filter)
     }
 
     override fun onDestroy() {
-        try {
-            unregisterReceiver(priceReceiver)
-        } catch (_: Exception) {
-        }
+        try { unregisterReceiver(priceReceiver) } catch (_: Exception) { }
         super.onDestroy()
     }
 
-    private fun formatPrice(value: String): String {
-        val number = value.toDoubleOrNull() ?: return value
-        return formatPrice(number)
-    }
-
+    private fun formatPrice(value: String): String = value.toDoubleOrNull()?.let { formatPrice(it) } ?: value
     private fun formatPrice(value: Double): String = decimalFormat.format(value) + " تومان"
-
     private fun formatRoundedPrice(value: Double): String = integerPriceFormat.format(round(value)) + " تومان"
-
     private fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
-
     private fun currentTime(): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-
     private fun formatTime(timestamp: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
 
     private fun getColorCompat(colorRes: Int): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getColor(colorRes)
-        } else {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) getColor(colorRes)
+        else {
             @Suppress("DEPRECATION")
             resources.getColor(colorRes)
         }
