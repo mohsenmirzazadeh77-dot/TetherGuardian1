@@ -60,7 +60,7 @@
             android:id="@+id/volumeText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="حجم معاملات: --"
+            android:text="حجم معاملات ۵ دقیقه اخیر: --"
             android:textSize="18sp"
             android:padding="10dp" />
 
@@ -68,7 +68,15 @@
             android:id="@+id/speedText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="سرعت معاملات: --"
+            android:text="تعداد معاملات ۵ دقیقه اخیر: --"
+            android:textSize="18sp"
+            android:padding="10dp" />
+
+        <TextView
+            android:id="@+id/largeCountText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: --"
             android:textSize="18sp"
             android:padding="10dp" />
 
@@ -76,17 +84,35 @@
             android:id="@+id/largeTradeText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="معاملات بزرگ: --"
+            android:text="۱۰ معامله بزرگ‌تر در ۵ دقیقه اخیر"
             android:textSize="18sp"
+            android:textStyle="bold"
             android:padding="10dp" />
 
         <TextView
             android:id="@+id/priceText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="آخرین قیمت: --"
+            android:text="آخرین قیمت معامله: -- تومان"
             android:textSize="18sp"
             android:padding="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="نمایش هشدار شدید"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="10dp" />
+
+        <Switch
+            android:id="@+id/severeAlertSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="هشدار شدید فعال باشد"
+            android:checked="true"
+            android:padding="10dp"
+            android:layout_marginBottom="10dp" />
 
         <TextView
             android:layout_width="match_parent"
@@ -109,7 +135,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="آخرین معاملات"
+            android:text="۱۰ معامله بزرگ‌تر در ۵ دقیقه اخیر، از قدیمی به جدید"
             android:textSize="20sp"
             android:textStyle="bold"
             android:layout_marginTop="18dp"
