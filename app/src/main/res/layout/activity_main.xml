@@ -5,32 +5,32 @@
         <ImageView android:layout_width="64dp" android:layout_height="64dp" android:layout_gravity="center" android:contentDescription="نگهبان تتر" android:src="@drawable/ic_tether_eye" android:layout_marginBottom="6dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="نگهبان تتر" android:textSize="28sp" android:textStyle="bold" android:textColor="#4527A0" android:gravity="center" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="پایش هوشمند قیمت تتر • NOBITEX" android:textSize="13sp" android:textColor="#66616D" android:gravity="center" android:layout_marginTop="2dp" android:layout_marginBottom="14dp" />
-        <TextView android:id="@+id/monitoringStatusText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="● پایش غیرفعال" android:textColor="#F44336" android:textSize="18sp" android:textStyle="bold" android:gravity="center" android:background="#DDECCB" android:padding="10dp" android:layout_marginBottom="8dp" />
+        <TextView android:id="@+id/monitoringStatusText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="● پایش غیرفعال" android:textColor="#F44336" android:textSize="18sp" android:textStyle="bold" android:gravity="center" android:background="@drawable/bg_pistachio_card" android:layout_marginBottom="8dp" />
         <Button android:id="@+id/monitoringButton" android:layout_width="match_parent" android:layout_height="52dp" android:text="فعال کردن برنامه" android:textSize="16sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
         <Button android:id="@+id/tradeMonitoringButton" android:layout_width="match_parent" android:layout_height="52dp" android:text="📊 مانیتورینگ معاملات" android:textSize="16sp" android:layout_marginBottom="16dp" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="#DDECCB" android:padding="16dp" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/bg_pistachio_card" android:layout_marginBottom="12dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قیمت لحظه‌ای" android:textColor="#7B1FA2" android:textSize="15sp" android:textStyle="bold" />
             <TextView android:id="@+id/priceText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#7B1FA2" android:textSize="27sp" android:textStyle="bold" android:layout_marginTop="4dp" />
             <TextView android:id="@+id/connectionText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="● در حال اتصال..." android:textColor="#F44336" android:textSize="14sp" android:textStyle="bold" android:layout_marginTop="6dp" />
             <TextView android:id="@+id/updateText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="آخرین دریافت: --" android:textSize="13sp" android:textColor="#66616D" android:layout_marginTop="3dp" />
         </LinearLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false" android:layout_marginBottom="12dp">
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:background="#DDECCB" android:padding="14dp" android:layout_marginEnd="6dp">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:background="@drawable/bg_pistachio_card" android:layout_marginEnd="6dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قیمت مبنا" android:textColor="#1976D2" android:textSize="14sp" android:textStyle="bold" />
                 <TextView android:id="@+id/baseText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#1976D2" android:textSize="20sp" android:textStyle="bold" android:layout_marginTop="5dp" />
                 <TextView android:id="@+id/baseTimeText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="زمان ثبت: --" android:textSize="12sp" android:textColor="#66616D" android:layout_marginTop="3dp" />
             </LinearLayout>
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:background="#DDECCB" android:padding="14dp" android:layout_marginStart="6dp">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:background="@drawable/bg_pistachio_card" android:layout_marginStart="6dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="حد هشدار" android:textColor="#F9A825" android:textSize="14sp" android:textStyle="bold" />
                 <TextView android:id="@+id/dropLimitText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#F9A825" android:textSize="20sp" android:textStyle="bold" android:layout_marginTop="5dp" />
                 <TextView android:id="@+id/dropPercentText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="0.5%" android:textSize="12sp" android:textColor="#66616D" android:layout_marginTop="3dp" />
             </LinearLayout>
         </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="#DDECCB" android:padding="16dp" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/bg_pistachio_card" android:layout_marginBottom="12dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تنظیم میزان کاهش برای هشدار" android:textSize="15sp" android:textStyle="bold" android:textColor="#333039" android:layout_marginBottom="7dp" />
             <Spinner android:id="@+id/dropPercentSpinner" android:layout_width="match_parent" android:layout_height="50dp" />
         </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="#DDECCB" android:padding="16dp" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/bg_pistachio_card" android:layout_marginBottom="12dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="صدای هشدار" android:textSize="15sp" android:textStyle="bold" android:textColor="#333039" android:layout_marginBottom="7dp" />
             <Spinner android:id="@+id/soundSpinner" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginBottom="8dp" />
             <Button android:id="@+id/soundTestButton" android:layout_width="match_parent" android:layout_height="48dp" android:text="آزمایش صدای انتخاب‌شده" />
