@@ -1,8 +1,8 @@
 package com.tetherguardian.app
 
 import android.content.Intent
-import android.media.Ringtone
-import android.media.RingtoneManager
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -15,9 +15,9 @@ import androidx.appcompat.app.AppCompatActivity
 class TradeMonitoringAlertActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var acknowledged = false
-    private var ringtone: Ringtone? = null
+    private var alertPlayer: MediaPlayer? = null
     private val stopSoundRunnable = Runnable { stopSound() }
-    private val endDisplay = Runnable { if (!acknowledged) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    private val endDisplay = Runnable { if (!acknowledged) { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); finish() } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,8 +30,12 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tradeAlertLargeCountText).text = "تعداد معاملات ≥ ۱۰۰۰ تتر: ${intent.getIntExtra("count_1000", 0)}"
         findViewById<Button>(R.id.tradeAlertAcknowledgeButton).setOnClickListener { acknowledgeAndClose() }
         findViewById<Button>(R.id.tradeAlertMonitorButton).setOnClickListener {
-            acknowledged = true; stopSound(); getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
-            handler.removeCallbacks(endDisplay); startActivity(Intent(this, TradeMonitoringActivity::class.java)); finish()
+            acknowledged = true
+            stopSound()
+            getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
+            handler.removeCallbacks(endDisplay)
+            startActivity(Intent(this, TradeMonitoringActivity::class.java))
+            finish()
         }
         playSelectedSound()
         handler.postDelayed(stopSoundRunnable, 10_000)
@@ -40,14 +44,36 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
 
     private fun playSelectedSound() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val uri = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        runCatching { ringtone = RingtoneManager.getRingtone(this, uri); ringtone?.play() }
+        val uri = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
+            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+        runCatching {
+            val player = MediaPlayer.create(applicationContext, uri) ?: return
+            player.setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build())
+            player.isLooping = true
+            alertPlayer = player
+            player.start()
+        }
     }
-    private fun stopSound() { runCatching { ringtone?.stop() }; ringtone = null }
+
+    private fun stopSound() {
+        try { alertPlayer?.stop() } catch (_: Exception) { }
+        try { alertPlayer?.release() } catch (_: Exception) { }
+        alertPlayer = null
+    }
+
     private fun acknowledgeAndClose() {
-        if (acknowledged) return; acknowledged = true; handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound()
-        getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID); finish()
+        if (acknowledged) return
+        acknowledged = true
+        handler.removeCallbacks(stopSoundRunnable)
+        handler.removeCallbacks(endDisplay)
+        stopSound()
+        getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
+        finish()
     }
-    override fun onBackPressed() { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); moveTaskToBack(true) }
+
+    override fun onBackPressed() { acknowledgeAndClose() }
     override fun onDestroy() { handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
 }
