@@ -45,8 +45,31 @@ jobs:
           ANDROID_KEY_ALIAS: tetherguardian
         run: gradle --no-daemon assembleRelease
 
+      - name: Verify APK output
+        run: |
+          test -f app/build/outputs/apk/release/app-release.apk
+          ls -lh app/build/outputs/apk/release/app-release.apk
+
+      - name: Package APK artifact
+        run: |
+          mkdir -p artifacts
+          cp app/build/outputs/apk/release/app-release.apk artifacts/TetherGuardian-release.apk
+          cd artifacts
+          zip -q TetherGuardian-release-apk.zip TetherGuardian-release.apk
+          ls -lh TetherGuardian-release.apk TetherGuardian-release-apk.zip
+
       - name: Upload signed APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: TetherGuardian-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: artifacts/TetherGuardian-release-apk.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK directly
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: TetherGuardian-release-apk-file
+          path: artifacts/TetherGuardian-release.apk
+          if-no-files-found: error
+          retention-days: 14
