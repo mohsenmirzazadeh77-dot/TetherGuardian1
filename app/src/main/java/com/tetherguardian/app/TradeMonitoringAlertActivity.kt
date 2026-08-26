@@ -35,16 +35,13 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         }
         playSelectedSound()
         handler.postDelayed(stopSoundRunnable, 10_000)
-        handler.postDelayed(endDisplay, 30_000)
+        handler.postDelayed(endDisplay, 10_000)
     }
 
     private fun playSelectedSound() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val uri = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        runCatching {
-            ringtone = RingtoneManager.getRingtone(this, uri)
-            ringtone?.play()
-        }
+        runCatching { ringtone = RingtoneManager.getRingtone(this, uri); ringtone?.play() }
     }
     private fun stopSound() { runCatching { ringtone?.stop() }; ringtone = null }
     private fun acknowledgeAndClose() {
