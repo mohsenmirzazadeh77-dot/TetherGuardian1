@@ -1,5 +1,6 @@
 package com.tetherguardian.app
 
+import android.content.Intent
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
@@ -23,6 +24,7 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         setContentView(R.layout.trade_monitoring_alert)
         findViewById<TextView>(R.id.tradeAlertScoreText).text = "امتیاز هشدار: ${intent.getIntExtra("score", 0)}/100"
+        findViewById<TextView>(R.id.tradeAlertReasonText).text = intent.getStringExtra("reason") ?: "رفتار غیرعادی معاملات شناسایی شد"
         findViewById<TextView>(R.id.tradeAlertCountText).text = "تعداد معاملات ۵ دقیقه اخیر: ${intent.getIntExtra("trade_count", 0)}"
         findViewById<TextView>(R.id.tradeAlertLargeCountText).text = "تعداد معاملات ≥ ۱۰۰۰ تتر: ${intent.getIntExtra("count_1000", 0)}"
         findViewById<Button>(R.id.tradeAlertAcknowledgeButton).setOnClickListener { acknowledgeAndClose() }
