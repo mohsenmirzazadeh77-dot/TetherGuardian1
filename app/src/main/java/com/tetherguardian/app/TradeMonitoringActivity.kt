@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.Switch
+import android.widget.TableLayout
+import android.widget.TableRow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
@@ -37,7 +39,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private lateinit var largeCountText: TextView
     private lateinit var priceText: TextView
     private lateinit var reasonText: TextView
-    private lateinit var latestTradesText: TextView
+    private lateinit var tradesTable: TableLayout
     private lateinit var refreshButton: Button
     private lateinit var severeAlertSwitch: Switch
     private val client = OkHttpClient()
@@ -72,7 +74,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         largeCountText = findViewById(R.id.largeCountText)
         priceText = findViewById(R.id.priceText)
         reasonText = findViewById(R.id.reasonText)
-        latestTradesText = findViewById(R.id.latestTradesText)
+        tradesTable = findViewById(R.id.tradesTable)
         refreshButton = findViewById(R.id.refreshTradesButton)
         severeAlertSwitch = findViewById(R.id.severeAlertSwitch)
     }
@@ -147,12 +149,34 @@ class TradeMonitoringActivity : AppCompatActivity() {
         speedText.text = "تعداد معاملات ۵ دقیقه اخیر: ${window.size}"
         largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
         val topTen = window.sortedByDescending { it.volume }.take(10).sortedBy { toMillis(it.time) }
-        latestTradesText.text = topTen.joinToString("\n") { t ->
-            val type = when { t.type.equals("buy", true) -> "خرید"; t.type.equals("sell", true) -> "فروش"; else -> t.type }
-            String.format(Locale.US, "%-8s | %-10s | %-6s | %12s", formatTime(t.time), priceFormat.format(t.priceRial / 10.0), type, volumeFormat.format(t.volume))
-        }
+        renderTradeRows(topTen)
         priceText.text = "آخرین قیمت معامله: ${priceFormat.format(window.last().priceRial / 10.0)} تومان"
         reasonText.text = buildReason(score, buyPct, sellPct, count1000, window.size, enabled)
+    }
+
+    private fun renderTradeRows(rows: List<Trade>) {
+        while (tradesTable.childCount > 1) tradesTable.removeViewAt(1)
+        rows.forEachIndexed { index, trade ->
+            val row = TableRow(this)
+            row.setPadding(4, 5, 4, 5)
+            val values = listOf(
+                formatTime(trade.time),
+                priceFormat.format(trade.priceRial / 10.0),
+                when { trade.type.equals("buy", true) -> "خرید"; trade.type.equals("sell", true) -> "فروش"; else -> trade.type },
+                volumeFormat.format(trade.volume)
+            )
+            values.forEachIndexed { column, value ->
+                val cell = TextView(this)
+                cell.text = value
+                cell.textSize = 12f
+                cell.gravity = android.view.Gravity.CENTER
+                cell.setPadding(3, 7, 3, 7)
+                cell.setBackgroundColor(if (index % 2 == 0) 0xFFEEF4E9.toInt() else 0xFFF7FAF4.toInt())
+                val weight = when (column) { 0 -> 1.1f; 1 -> 1.3f; 2 -> 0.9f; else -> 1.2f }
+                row.addView(cell, TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight))
+            }
+            tradesTable.addView(row)
+        }
     }
 
     private fun calculateScore(buyPct: Double, sellPct: Double, count: Int): Int = min(100, (min(55.0, abs(buyPct - sellPct) * 1.1) + min(45.0, max(0, count - 20) * 1.5)).toInt())
