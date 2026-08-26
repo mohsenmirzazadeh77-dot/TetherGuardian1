@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONArray
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,6 +29,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private lateinit var volumeText: TextView
     private lateinit var speedText: TextView
     private lateinit var largeTradeText: TextView
+    private lateinit var largeCountText: TextView
     private lateinit var priceText: TextView
     private lateinit var reasonText: TextView
     private lateinit var latestTradesText: TextView
@@ -38,8 +38,13 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private val client = OkHttpClient()
     private var refreshJob: Job? = null
     private val numberFormat = DecimalFormat("#,##0.##")
+    private val priceFormat = DecimalFormat("#,##0")
 
-    data class Trade(val time: Long, val price: Double, val volume: Double, val type: String)
+    data class Trade(val time: Long, val priceRial: Double, val volume: Double, val type: String)
+
+    // Cache the recent five-minute window so fast trades remain counted even after
+    // they disappear from the API response. Duplicates are removed by a stable key.
+    private val recentTrades = LinkedHashMap<String, Trade>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +67,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         volumeText = findViewById(R.id.volumeText)
         speedText = findViewById(R.id.speedText)
         largeTradeText = findViewById(R.id.largeTradeText)
+        largeCountText = findViewById(R.id.largeCountText)
         priceText = findViewById(R.id.priceText)
         reasonText = findViewById(R.id.reasonText)
         latestTradesText = findViewById(R.id.latestTradesText)
@@ -98,27 +104,51 @@ class TradeMonitoringActivity : AppCompatActivity() {
                 val price = item.optString("price").toDoubleOrNull()
                 val volume = item.optString("volume").toDoubleOrNull()
                 val type = item.optString("type", "unknown")
-                if (time >= 0 && price != null && volume != null) result += Trade(time, price, volume, type)
+                if (time >= 0 && price != null && volume != null) {
+                    result += Trade(time, price, volume, type)
+                }
             }
             return result
         }
     }
 
-    private fun render(trades: List<Trade>) {
-        if (trades.isEmpty()) {
+    private fun render(fetched: List<Trade>) {
+        if (fetched.isEmpty()) {
             statusText.text = "⚪ داده‌ای دریافت نشد"
             reasonText.text = "نوبیتکس پاسخ داد، اما معامله قابل پردازشی در پاسخ وجود نداشت."
             return
         }
 
-        val buy = trades.filter { it.type.equals("buy", true) }.sumOf { it.volume }
-        val sell = trades.filter { it.type.equals("sell", true) }.sumOf { it.volume }
+        val now = System.currentTimeMillis()
+        val cutoff = now - 5 * 60 * 1000L
+
+        // Keep all unique trades seen during the rolling five-minute window.
+        for (trade in fetched) {
+            val key = "${trade.time}|${trade.priceRial}|${trade.volume}|${trade.type}"
+            recentTrades[key] = trade
+        }
+        recentTrades.entries.removeIf { toMillis(it.value.time) < cutoff }
+
+        val windowTrades = recentTrades.values
+            .filter { toMillis(it.time) >= cutoff }
+            .sortedBy { toMillis(it.time) }
+
+        if (windowTrades.isEmpty()) {
+            statusText.text = "⚪ در انتظار معاملات پنج دقیقه اخیر"
+            return
+        }
+
+        val buy = windowTrades.filter { it.type.equals("buy", true) }.sumOf { it.volume }
+        val sell = windowTrades.filter { it.type.equals("sell", true) }.sumOf { it.volume }
         val total = buy + sell
         val buyPct = if (total > 0) buy / total * 100.0 else 50.0
         val sellPct = 100.0 - buyPct
-        val largest = trades.maxOfOrNull { it.volume } ?: 0.0
-        val largeCount = trades.count { it.volume >= 5000.0 }
-        val score = calculateScore(buyPct, sellPct, largeCount, trades.size)
+
+        // The 1000-USDT threshold is ONLY a five-minute counter. It is not part
+        // of the anomaly score and does not influence the market state.
+        val thousandCount = windowTrades.count { it.volume >= 1000.0 }
+
+        val score = calculateScore(buyPct, sellPct, windowTrades.size)
         val state = when {
             score >= 70 -> "🟠 هشدار شدید"
             score >= 50 -> "🟠 غیرعادی"
@@ -130,42 +160,53 @@ class TradeMonitoringActivity : AppCompatActivity() {
         scoreText.text = "$score/100"
         buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"
         sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"
-        volumeText.text = "حجم معاملات: ${numberFormat.format(total)} USDT"
-        speedText.text = "سرعت معاملات: ${trades.size} معامله در داده اخیر"
-        largeTradeText.text = "$largeCount معامله بالای ۵۰۰۰ USDT | بزرگ‌ترین: ${numberFormat.format(largest)} USDT"
-        priceText.text = "آخرین قیمت معامله: ${numberFormat.format(trades.first().price)} تومان"
-        reasonText.text = buildReason(score, buyPct, sellPct, largeCount, trades.size)
-        latestTradesText.text = trades.take(10).joinToString("\n") {
-            "${formatTime(it.time)} | ${it.type} | ${numberFormat.format(it.price)} | ${numberFormat.format(it.volume)} USDT"
+        volumeText.text = "حجم معاملات ۵ دقیقه اخیر: ${numberFormat.format(total)} USDT"
+        speedText.text = "تعداد معاملات ۵ دقیقه اخیر: ${windowTrades.size}"
+        largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $thousandCount"
+        largeTradeText.text = "۱۰ معامله بزرگ‌تر در ۵ دقیقه اخیر"
+
+        // Top ten by volume, but displayed chronologically from old to new.
+        val topTen = windowTrades
+            .sortedByDescending { it.volume }
+            .take(10)
+            .sortedBy { toMillis(it.time) }
+
+        latestTradesText.text = topTen.joinToString("\n") {
+            val type = if (it.type.equals("buy", true)) "خرید" else if (it.type.equals("sell", true)) "فروش" else it.type
+            "${formatTime(it.time)} | $type | ${numberFormat.format(it.volume)} USDT | ${priceFormat.format(it.priceRial / 10.0)} تومان"
         }
+
+        // API price is received in Rial; UI is explicitly Toman.
+        priceText.text = "آخرین قیمت معامله: ${priceFormat.format(windowTrades.last().priceRial / 10.0)} تومان"
+        reasonText.text = buildReason(score, buyPct, sellPct, thousandCount, windowTrades.size)
     }
 
-    private fun calculateScore(buyPct: Double, sellPct: Double, largeCount: Int, count: Int): Int {
-        val imbalance = min(40.0, abs(buyPct - sellPct) * 0.8)
-        val large = min(30.0, largeCount * 10.0)
-        val activity = min(30.0, max(0, count - 20) * 1.5)
-        return min(100, (imbalance + large + activity).toInt())
+    private fun calculateScore(buyPct: Double, sellPct: Double, count: Int): Int {
+        val imbalance = min(55.0, abs(buyPct - sellPct) * 1.1)
+        val activity = min(45.0, max(0, count - 20) * 1.5)
+        return min(100, (imbalance + activity).toInt())
     }
 
-    private fun buildReason(score: Int, buyPct: Double, sellPct: Double, largeCount: Int, count: Int): String {
+    private fun buildReason(score: Int, buyPct: Double, sellPct: Double, thousandCount: Int, count: Int): String {
         val direction = if (buyPct >= sellPct) "خرید" else "فروش"
         return buildString {
-            append("وضعیت بر اساس معاملات واقعی دریافت‌شده از نوبیتکس محاسبه شده است.\n")
+            append("وضعیت بر اساس معاملات واقعی پنج دقیقه اخیر نوبیتکس محاسبه شده است.\n")
             append("• فشار $direction بیشتر است (${numberFormat.format(max(buyPct, sellPct))}٪).\n")
-            append("• تعداد معاملات دریافت‌شده: $count\n")
-            append("• معاملات بزرگ: $largeCount\n")
+            append("• تعداد معاملات پنج دقیقه اخیر: $count\n")
+            append("• معاملات پنج دقیقه اخیر با حجم ≥ ۱۰۰۰ تتر: $thousandCount\n")
+            append("• این عدد فقط شاخص آماری پنج دقیقه اخیر است و به‌تنهایی هشدار ایجاد نمی‌کند.\n")
             when {
                 score < 30 -> append("نتیجه: شاخص‌های فعلی در محدوده عادی هستند.")
                 score < 50 -> append("نتیجه: افزایش فعالیت دیده می‌شود و بازار تحت نظر است.")
-                else -> append("نتیجه: چند شاخص هم‌زمان افزایش یافته‌اند و رفتار بازار غیرعادی‌تر شده است.")
+                else -> append("نتیجه: عدم‌تعادل یا فعالیت معاملاتی افزایش یافته و رفتار بازار غیرعادی‌تر شده است.")
             }
         }
     }
 
-    private fun formatTime(epoch: Long): String {
-        val millis = if (epoch < 10_000_000_000L) epoch * 1000L else epoch
-        return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(millis))
-    }
+    private fun toMillis(epoch: Long): Long = if (epoch < 10_000_000_000L) epoch * 1000L else epoch
+
+    private fun formatTime(epoch: Long): String =
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(toMillis(epoch)))
 
     override fun onDestroy() {
         refreshJob?.cancel()
