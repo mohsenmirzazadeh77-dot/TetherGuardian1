@@ -33,8 +33,12 @@ jobs:
       - name: Decode release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
         run: |
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > tetherguardian-release.jks
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode --ignore-garbage > tetherguardian-release.jks
+          test -s tetherguardian-release.jks
+          file tetherguardian-release.jks
 
       - name: Verify release keystore
         env:
@@ -52,6 +56,7 @@ jobs:
       - name: Locate Release APK
         shell: bash
         run: |
+          set -euo pipefail
           echo "Searching for generated APK..."
           find . -type f -name '*.apk' -print
           APK_PATH="$(find . -type f -path '*/build/outputs/apk/release/*.apk' | head -n 1)"
