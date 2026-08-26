@@ -102,7 +102,7 @@ class TradeMonitoringService : Service() {
             val buyPct = if (total > 0) buy / total * 100 else 50.0
             val sellPct = 100.0 - buyPct
             val imbalance = abs(buyPct - sellPct)
-            val activity = min(45.0, max(0.0, window.size - 20) * 1.5)
+            val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val score = min(100, (min(55.0, imbalance * 1.1) + activity).toInt())
             val largeCount = window.count { it.volume >= 1000.0 }
             updateNotification("وضعیت: ${state(score)} • ${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount")
@@ -115,6 +115,8 @@ class TradeMonitoringService : Service() {
                     putExtra("reason", if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود")
                     putExtra("buy_pressure", buyPct)
                     putExtra("sell_pressure", sellPct)
+                    putExtra("trade_count", window.size)
+                    putExtra("count_1000", largeCount)
                 }
                 ContextCompat.startActivity(this, alert, null)
             }
