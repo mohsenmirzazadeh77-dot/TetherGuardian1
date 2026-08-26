@@ -16,6 +16,7 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var acknowledged = false
     private var ringtone: Ringtone? = null
+    private val stopSoundRunnable = Runnable { stopSound() }
     private val endDisplay = Runnable { if (!acknowledged) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,19 +33,24 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
             acknowledged = true; stopSound(); getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
             handler.removeCallbacks(endDisplay); startActivity(Intent(this, TradeMonitoringActivity::class.java)); finish()
         }
-        playSelectedSound(); handler.postDelayed(endDisplay, 30_000)
+        playSelectedSound()
+        handler.postDelayed(stopSoundRunnable, 10_000)
+        handler.postDelayed(endDisplay, 30_000)
     }
 
     private fun playSelectedSound() {
         val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
         val uri = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        runCatching { ringtone = RingtoneManager.getRingtone(this, uri); ringtone?.play() }
+        runCatching {
+            ringtone = RingtoneManager.getRingtone(this, uri)
+            ringtone?.play()
+        }
     }
     private fun stopSound() { runCatching { ringtone?.stop() }; ringtone = null }
     private fun acknowledgeAndClose() {
-        if (acknowledged) return; acknowledged = true; handler.removeCallbacks(endDisplay); stopSound()
+        if (acknowledged) return; acknowledged = true; handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound()
         getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID); finish()
     }
     override fun onBackPressed() { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); moveTaskToBack(true) }
-    override fun onDestroy() { handler.removeCallbacks(endDisplay); stopSound(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
 }
