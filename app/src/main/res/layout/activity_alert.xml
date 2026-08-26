@@ -1,70 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="28dp">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🔴 هشدار ریزش تتر"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginBottom="28dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="قیمت هنگام هشدار"
-        android:textSize="15sp" />
-
-    <TextView
-        android:id="@+id/alertPriceText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="--"
-        android:textSize="30sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="18dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="مبنای جدید"
-        android:textSize="15sp" />
-
-    <TextView
-        android:id="@+id/alertBaseText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="--"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="18dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="میزان کاهش"
-        android:textSize="15sp" />
-
-    <TextView
-        android:id="@+id/alertDropText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="--"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
-
-    <Button
-        android:id="@+id/acknowledgeButton"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="مشاهده هشدار"
-        android:textSize="17sp" />
-
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center" android:padding="24dp" android:background="#641522">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⚠ هشدار کاهش تتر" android:textColor="#FFFFFF" android:textSize="30sp" android:textStyle="bold" android:gravity="center" android:layout_marginBottom="10dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قیمت تتر از حد تعیین‌شده عبور کرده است" android:textColor="#FFD9DE" android:textSize="15sp" android:gravity="center" android:layout_marginBottom="30dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قیمت هنگام هشدار" android:textColor="#FFD9DE" android:textSize="15sp" android:gravity="center" />
+    <TextView android:id="@+id/alertPriceText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#FFFFFF" android:textSize="34sp" android:textStyle="bold" android:gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="22dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قیمت مبنا" android:textColor="#FFD9DE" android:textSize="15sp" android:gravity="center" />
+    <TextView android:id="@+id/alertBaseText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#FFFFFF" android:textSize="25sp" android:textStyle="bold" android:gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="22dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="میزان کاهش" android:textColor="#FFD9DE" android:textSize="15sp" android:gravity="center" />
+    <TextView android:id="@+id/alertDropText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="--" android:textColor="#FFE082" android:textSize="32sp" android:textStyle="bold" android:gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="34dp" />
+    <Button android:id="@+id/acknowledgeButton" android:layout_width="match_parent" android:layout_height="58dp" android:text="هشدار مشاهده شد" android:textColor="#641522" android:textSize="18sp" android:textStyle="bold" android:backgroundTint="#FFFFFF" />
 </LinearLayout>
