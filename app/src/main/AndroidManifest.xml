@@ -26,6 +26,17 @@
             android:name=".TradeMonitoringActivity"
             android:exported="false" />
 
+        <activity-alias
+            android:name=".TradeMonitoringLauncher"
+            android:exported="true"
+            android:label="مانیتورینگ معاملات"
+            android:targetActivity=".TradeMonitoringActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
