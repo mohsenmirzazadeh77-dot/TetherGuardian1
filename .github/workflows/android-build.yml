@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/main-ui-refresh
+      - feature/trade-monitor
   workflow_dispatch:
 
 jobs:
