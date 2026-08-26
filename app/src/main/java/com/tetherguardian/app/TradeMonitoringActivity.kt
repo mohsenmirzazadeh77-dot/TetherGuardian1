@@ -44,6 +44,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private var refreshJob: Job? = null
     private val numberFormat = DecimalFormat("#,##0.##")
     private val priceFormat = DecimalFormat("#,##0")
+    private val volumeFormat = DecimalFormat("#,##0.##")
     private val recentTrades = LinkedHashMap<String, Trade>()
     data class Trade(val time: Long, val priceRial: Double, val volume: Double, val type: String)
 
@@ -148,7 +149,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         val topTen = window.sortedByDescending { it.volume }.take(10).sortedBy { toMillis(it.time) }
         latestTradesText.text = topTen.joinToString("\n") { t ->
             val type = when { t.type.equals("buy", true) -> "خرید"; t.type.equals("sell", true) -> "فروش"; else -> t.type }
-            String.format(Locale.US, "%-8s  %-12s  %-8s  %10s", formatTime(t.time), priceFormat.format(t.priceRial / 10.0), type, numberFormat.format(t.volume))
+            String.format(Locale.US, "%-8s | %-10s | %-6s | %12s", formatTime(t.time), priceFormat.format(t.priceRial / 10.0), type, volumeFormat.format(t.volume))
         }
         priceText.text = "آخرین قیمت معامله: ${priceFormat.format(window.last().priceRial / 10.0)} تومان"
         reasonText.text = buildReason(score, buyPct, sellPct, count1000, window.size, enabled)
