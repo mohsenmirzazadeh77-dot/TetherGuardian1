@@ -1,45 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#F7F5FA">
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="18dp">
-
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#F7F5FA">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="📊 مانیتورینگ معاملات" android:textSize="27sp" android:textStyle="bold" android:textColor="#2E7D32" android:gravity="center" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="پایش معاملات واقعی بازار USDT/IRT نوبیتکس" android:textSize="13sp" android:textColor="#66616D" android:gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="14dp" />
-
         <TextView android:id="@+id/marketStateText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🟢 عادی" android:textSize="21sp" android:textStyle="bold" android:textColor="#2E7D32" android:background="#DDECCB" android:gravity="center" android:padding="14dp" />
         <TextView android:id="@+id/scoreText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="0/100" android:textSize="30sp" android:textStyle="bold" android:textColor="#4527A0" android:gravity="center" android:padding="12dp" />
-
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="8dp">
             <TextView android:id="@+id/buyPressureText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="فشار خرید: --" android:textSize="16sp" android:textStyle="bold" android:textColor="#2E7D32" android:background="#DDECCB" android:gravity="center" android:padding="12dp" android:layout_marginEnd="4dp" />
             <TextView android:id="@+id/sellPressureText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="فشار فروش: --" android:textSize="16sp" android:textStyle="bold" android:textColor="#EF6C00" android:background="#DDECCB" android:gravity="center" android:padding="12dp" android:layout_marginStart="4dp" />
         </LinearLayout>
-
         <TextView android:id="@+id/volumeText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="حجم معاملات ۵ دقیقه اخیر: --" android:textSize="16sp" android:background="#DDECCB" android:padding="12dp" android:layout_marginBottom="6dp" />
         <TextView android:id="@+id/speedText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تعداد معاملات ۵ دقیقه اخیر: --" android:textSize="16sp" android:background="#DDECCB" android:padding="12dp" android:layout_marginBottom="6dp" />
         <TextView android:id="@+id/largeCountText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: --" android:textSize="16sp" android:background="#DDECCB" android:padding="12dp" android:layout_marginBottom="10dp" />
-
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="۱۰ معامله بزرگ‌تر در ۵ دقیقه اخیر" android:textSize="19sp" android:textStyle="bold" android:layout_marginBottom="5dp" />
-
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:background="#C9DEB7" android:padding="8dp">
             <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.1" android:text="زمان معامله" android:textStyle="bold" android:textSize="12sp" android:gravity="center" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.3" android:text="قیمت معامله" android:textStyle="bold" android:textSize="12sp" android:gravity="center" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="0.9" android:text="نوع معامله" android:textStyle="bold" android:textSize="12sp" android:gravity="center" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.2" android:text="حجم معامله" android:textStyle="bold" android:textSize="12sp" android:gravity="center" />
         </LinearLayout>
-        <TextView android:id="@+id/latestTradesText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="در انتظار معامله..." android:textSize="13sp" android:fontFamily="monospace" android:background="#EEF4E9" android:padding="8dp" />
-
+        <TextView android:id="@+id/latestTradesText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="در انتظار معامله..." android:textSize="13sp" android:fontFamily="monospace" android:textDirection="ltr" android:gravity="center_vertical" android:background="#EEF4E9" android:padding="8dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="نمایش هشدار شدید" android:textSize="18sp" android:textStyle="bold" android:layout_marginTop="14dp" />
         <Switch android:id="@+id/severeAlertSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="هشدار شدید فعال باشد" android:checked="true" android:padding="10dp" />
-
+        <Button android:id="@+id/tradeAlertSoundButton" android:layout_width="match_parent" android:layout_height="50dp" android:text="🔊 انتخاب صدای هشدار مانیتورینگ" android:layout_marginTop="6dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🔍 چرا این وضعیت محاسبه شده؟" android:textSize="19sp" android:textStyle="bold" android:layout_marginTop="12dp" android:layout_marginBottom="5dp" />
         <TextView android:id="@+id/reasonText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="در انتظار دریافت معاملات..." android:textSize="15sp" android:textColor="#333039" android:background="#DDECCB" android:padding="13dp" />
-
         <TextView android:id="@+id/priceText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="آخرین قیمت معامله: -- تومان" android:textSize="17sp" android:textStyle="bold" android:background="#DDECCB" android:padding="12dp" android:layout_marginTop="10dp" />
         <Button android:id="@+id/refreshTradesButton" android:layout_width="match_parent" android:layout_height="52dp" android:text="به‌روزرسانی معاملات" android:textSize="17sp" android:layout_marginTop="12dp" />
     </LinearLayout>
