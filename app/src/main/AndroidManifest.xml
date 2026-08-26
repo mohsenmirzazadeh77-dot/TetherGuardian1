@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <application android:name=".TetherGuardianApplication" android:allowBackup="true" android:icon="@drawable/ic_tether_eye" android:roundIcon="@drawable/ic_tether_eye" android:label="نگهبان تتر" android:supportsRtl="true" android:theme="@style/Theme.TetherGuardian">
-        <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         <activity android:name=".AlertActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
         <activity android:name=".TradeMonitoringAlertActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
         <activity android:name=".TradeMonitoringActivity" android:exported="false" android:label="مانیتورینگ معاملات" />
