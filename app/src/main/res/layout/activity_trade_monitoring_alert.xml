@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="28dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🟢 هشدار شدید مانیتورینگ"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/tradeAlertScore"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="امتیاز هشدار: --/100"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="14dp" />
+
+    <TextView
+        android:id="@+id/tradeAlertCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="معاملات ۵ دقیقه اخیر: --"
+        android:textSize="18sp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tradeAlert1000"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="معاملات ≥ ۱۰۰۰ تتر: --"
+        android:textSize="18sp"
+        android:layout_marginBottom="28dp" />
+
+    <Button
+        android:id="@+id/tradeAlertAcknowledge"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="هشدار مشاهده شد"
+        android:textSize="17sp" />
+</LinearLayout>
