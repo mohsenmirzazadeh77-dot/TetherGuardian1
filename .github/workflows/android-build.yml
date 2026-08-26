@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/monitoring-service
   workflow_dispatch:
 
 jobs:
@@ -25,11 +26,27 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build Debug APK
-        run: gradle --no-daemon assembleDebug
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | sed '/-----BEGIN CERTIFICATE-----/d;/-----END CERTIFICATE-----/d' | tr -d '\r\n ' | base64 --decode > tetherguardian-release.jks
 
-      - name: Upload APK
+      - name: Verify release keystore
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          keytool -list -keystore tetherguardian-release.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias tetherguardian >/dev/null
+
+      - name: Build signed Release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: tetherguardian
+        run: gradle --no-daemon assembleRelease
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: TetherGuardian-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: TetherGuardian-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
