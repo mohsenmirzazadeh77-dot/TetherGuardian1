@@ -54,6 +54,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_trade_monitoring)
         bindViews()
+        findViewById<Button>(R.id.backToMainButton).setOnClickListener { finish() }
         val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
         severeAlertSwitch.isChecked = prefs.getBoolean(TradeMonitoringService.KEY_SEVERE_ALERT, true)
         severeAlertSwitch.setOnCheckedChangeListener { _, enabled -> prefs.edit().putBoolean(TradeMonitoringService.KEY_SEVERE_ALERT, enabled).apply() }
@@ -159,12 +160,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         rows.forEachIndexed { index, trade ->
             val row = TableRow(this)
             row.setPadding(4, 5, 4, 5)
-            val values = listOf(
-                formatTime(trade.time),
-                priceFormat.format(trade.priceRial / 10.0),
-                when { trade.type.equals("buy", true) -> "خرید"; trade.type.equals("sell", true) -> "فروش"; else -> trade.type },
-                volumeFormat.format(trade.volume)
-            )
+            val values = listOf(formatTime(trade.time), priceFormat.format(trade.priceRial / 10.0), when { trade.type.equals("buy", true) -> "خرید"; trade.type.equals("sell", true) -> "فروش"; else -> trade.type }, volumeFormat.format(trade.volume))
             values.forEachIndexed { column, value ->
                 val cell = TextView(this)
                 cell.text = value
