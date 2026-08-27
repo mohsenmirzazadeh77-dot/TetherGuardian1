@@ -48,7 +48,7 @@ class TradeMonitoringService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("وضعیت: عادی • در حال پایش معاملات"))
+        startForeground(NOTIFICATION_ID, buildNotification("مانیتورینگ فعال • در حال دریافت معاملات..."))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -136,7 +136,7 @@ class TradeMonitoringService : Service() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) }
             )
         }
     }
@@ -146,6 +146,7 @@ class TradeMonitoringService : Service() {
         .setContentTitle("نگهبان تتر • مانیتورینگ معاملات")
         .setContentText(text)
         .setOngoing(true)
+        .setNumber(0)
         .setContentIntent(PendingIntent.getActivity(this, 4202, Intent(this, TradeMonitoringActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0))
         .build()
 
