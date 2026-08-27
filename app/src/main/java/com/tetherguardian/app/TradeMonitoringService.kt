@@ -33,6 +33,13 @@ class TradeMonitoringService : Service() {
         const val ACTION_START = "com.tetherguardian.app.action.TRADE_MONITOR_START"
         const val ACTION_STOP = "com.tetherguardian.app.action.TRADE_MONITOR_STOP"
         const val ACTION_REFRESH = "com.tetherguardian.app.action.TRADE_MONITOR_REFRESH"
+        const val ACTION_STATUS_UPDATE = "com.tetherguardian.app.action.TRADE_MONITOR_STATUS_UPDATE"
+        const val EXTRA_SCORE = "score"
+        const val EXTRA_BUY_PRESSURE = "buy_pressure"
+        const val EXTRA_SELL_PRESSURE = "sell_pressure"
+        const val EXTRA_TRADE_COUNT = "trade_count"
+        const val EXTRA_COUNT_1000 = "count_1000"
+        const val EXTRA_REASON = "reason"
         const val ALERT_NOTIFICATION_ID = 4202
         private const val CHANNEL_ID = "trade_monitoring_channel"
         private const val NOTIFICATION_ID = 4201
@@ -105,14 +112,16 @@ class TradeMonitoringService : Service() {
             val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val score = min(100, (min(55.0, imbalance * 1.1) + activity).toInt())
             val largeCount = window.count { it.volume >= 1000.0 }
+            val reason = if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود"
             updateNotification("وضعیت: ${state(score)} • ${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount")
+            sendStatus(score, buyPct, sellPct, window.size, largeCount, reason)
             val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
             if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && score >= 70 && !severeAlreadyShown) {
                 severeAlreadyShown = true
                 val alert = Intent(this, TradeMonitoringAlertActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     putExtra("score", score)
-                    putExtra("reason", if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود")
+                    putExtra("reason", reason)
                     putExtra("buy_pressure", buyPct)
                     putExtra("sell_pressure", sellPct)
                     putExtra("trade_count", window.size)
@@ -122,6 +131,18 @@ class TradeMonitoringService : Service() {
             }
             if (score < 60) severeAlreadyShown = false
         }
+    }
+
+    private fun sendStatus(score: Int, buyPct: Double, sellPct: Double, count: Int, count1000: Int, reason: String) {
+        sendBroadcast(Intent(ACTION_STATUS_UPDATE).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_SCORE, score)
+            putExtra(EXTRA_BUY_PRESSURE, buyPct)
+            putExtra(EXTRA_SELL_PRESSURE, sellPct)
+            putExtra(EXTRA_TRADE_COUNT, count)
+            putExtra(EXTRA_COUNT_1000, count1000)
+            putExtra(EXTRA_REASON, reason)
+        })
     }
 
     private fun state(score: Int) = when {
