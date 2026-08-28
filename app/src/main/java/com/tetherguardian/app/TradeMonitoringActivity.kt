@@ -72,7 +72,11 @@ class TradeMonitoringActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_trade_monitoring)
         bindViews()
-        findViewById<Button>(R.id.backToMainButton).setOnClickListener { finish() }
+        findViewById<Button>(R.id.backToMainButton).setOnClickListener {
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            })
+        }
         val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
         severeAlertSwitch.isChecked = prefs.getBoolean(TradeMonitoringService.KEY_SEVERE_ALERT, true)
         severeAlertSwitch.setOnCheckedChangeListener { _, enabled -> prefs.edit().putBoolean(TradeMonitoringService.KEY_SEVERE_ALERT, enabled).apply() }
@@ -105,7 +109,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     }
 
     private fun applyStatus(score: Int, buyPct: Double, sellPct: Double, count: Int, count1000: Int, reason: String) {
-        statusText.text = when { score >= 70 && severeAlertSwitch.isChecked -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }
+        statusText.text = when { score >= 70 -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }
         scoreText.text = "$score/100"
         buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"
         sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"
@@ -124,7 +128,8 @@ class TradeMonitoringActivity : AppCompatActivity() {
     }
 
     private fun openSoundPicker() {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE); val current = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
+        val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
+        val current = prefs.getString(TradeMonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
         startActivityForResult(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply { putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION); putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "انتخاب صدای هشدار مانیتورینگ"); putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true); putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false); if (current != null) putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current) }, SOUND_REQUEST)
     }
 
@@ -132,7 +137,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data); if (requestCode != SOUND_REQUEST || resultCode != RESULT_OK) return
         val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI) ?: return
-        getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE).edit().putString(MonitoringService.KEY_SOUND_URI, uri.toString()).apply(); findViewById<Button>(R.id.tradeAlertSoundButton).text = "🔊 صدای هشدار انتخاب شد"
+        getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE).edit().putString(TradeMonitoringService.KEY_SOUND_URI, uri.toString()).apply(); findViewById<Button>(R.id.tradeAlertSoundButton).text = "🔊 صدای هشدار مانیتورینگ انتخاب شد"
     }
 
     private fun refreshOnce() {
@@ -156,8 +161,10 @@ class TradeMonitoringActivity : AppCompatActivity() {
         val window = recentTrades.values.filter { toMillis(it.time) >= cutoff }.sortedBy { toMillis(it.time) }
         if (window.isEmpty()) return
         val buy = window.filter { it.type.equals("buy", true) }.sumOf { it.volume }; val sell = window.filter { it.type.equals("sell", true) }.sumOf { it.volume }; val total = buy + sell
-        val buyPct = if (total > 0) buy / total * 100 else 50.0; val sellPct = 100.0 - buyPct; val count1000 = window.count { it.volume >= 1000.0 }; val score = calculateScore(buyPct, sellPct, window.size); val enabled = severeAlertSwitch.isChecked
-        statusText.text = when { score >= 70 && enabled -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }; scoreText.text = "$score/100"; buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"; sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"; volumeText.text = "حجم معاملات ۵ دقیقه اخیر: ${numberFormat.format(total)} USDT"; speedText.text = "تعداد معاملات ۵ دقیقه اخیر: ${window.size}"; largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
+        val buyPct = if (total > 0) buy / total * 100 else 50.0; val sellPct = 100.0 - buyPct; val count1000 = window.count { it.volume >= 1000.0 }
+        val baseScore = calculateScore(buyPct, sellPct, window.size); val score = if (count1000 >= 5) max(baseScore, 70) else baseScore
+        val enabled = severeAlertSwitch.isChecked
+        statusText.text = when { score >= 70 -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }; scoreText.text = "$score/100"; buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"; sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"; volumeText.text = "حجم معاملات ۵ دقیقه اخیر: ${numberFormat.format(total)} USDT"; speedText.text = "تعداد معاملات ۵ دقیقه اخیر: ${window.size}"; largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
         val topTen = window.sortedByDescending { it.volume }.take(10).sortedBy { toMillis(it.time) }; renderTradeRows(topTen); priceText.text = "آخرین قیمت معامله: ${priceFormat.format(window.last().priceRial / 10.0)} تومان"; reasonText.text = buildReason(score, buyPct, sellPct, count1000, window.size, enabled)
     }
 
@@ -172,7 +179,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     }
 
     private fun calculateScore(buyPct: Double, sellPct: Double, count: Int): Int = min(100, (min(55.0, abs(buyPct - sellPct) * 1.1) + min(45.0, max(0.0, count.toDouble() - 20.0) * 1.5)).toInt())
-    private fun buildReason(score: Int, buyPct: Double, sellPct: Double, count1000: Int, count: Int, enabled: Boolean): String = buildString { append("وضعیت بر اساس معاملات واقعی پنج دقیقه اخیر نوبیتکس محاسبه شده است.\n"); append("• فشار ${if (buyPct >= sellPct) "خرید" else "فروش"} بیشتر است (${numberFormat.format(max(buyPct, sellPct))}٪).\n"); append("• تعداد معاملات پنج دقیقه اخیر: $count\n• معاملات پنج دقیقه اخیر با حجم ≥ ۱۰۰۰ تتر: $count1000\n"); append("• آستانه ۱۰۰۰ تتر فقط برای شمارش است و در امتیاز هشدار دخالت ندارد.\n• هشدار شدید: ${if (enabled) "فعال" else "غیرفعال"}\n"); append(when { score < 30 -> "نتیجه: شاخص‌های فعلی در محدوده عادی هستند."; score < 50 -> "نتیجه: افزایش فعالیت دیده می‌شود و بازار تحت نظر است."; else -> "نتیجه: عدم‌تعادل یا فعالیت معاملاتی افزایش یافته و رفتار بازار غیرعادی‌تر شده است." }) }
+    private fun buildReason(score: Int, buyPct: Double, sellPct: Double, count1000: Int, count: Int, enabled: Boolean): String = buildString { append("وضعیت بر اساس معاملات واقعی پنج دقیقه اخیر نوبیتکس محاسبه شده است.\n"); append("• فشار ${if (buyPct >= sellPct) "خرید" else "فروش"} بیشتر است (${numberFormat.format(max(buyPct, sellPct))}٪).\n"); append("• تعداد معاملات پنج دقیقه اخیر: $count\n• معاملات پنج دقیقه اخیر با حجم ≥ ۱۰۰۰ تتر: $count1000\n"); append("• وجود حداقل ۵ معامله ≥ ۱۰۰۰ تتر نیز به‌عنوان نشانه فعالیت غیرعادی شدید در نظر گرفته می‌شود.\n• هشدار شدید: ${if (enabled) "فعال" else "غیرفعال"}\n"); append(when { score < 30 -> "نتیجه: شاخص‌های فعلی در محدوده عادی هستند."; score < 50 -> "نتیجه: افزایش فعالیت دیده می‌شود و بازار تحت نظر است."; else -> "نتیجه: عدم‌تعادل یا فعالیت معاملاتی افزایش یافته و رفتار بازار غیرعادی‌تر شده است." }) }
     private fun toMillis(value: Long): Long = if (value < 10_000_000_000L) value * 1000L else value
     private fun formatTime(value: Long): String = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(toMillis(value)))
     override fun onDestroy() { refreshJob?.cancel(); super.onDestroy() }
