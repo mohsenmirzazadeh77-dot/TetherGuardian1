@@ -43,8 +43,8 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
     }
 
     private fun playSelectedSound() {
-        val prefs = getSharedPreferences(MonitoringService.PREFS_NAME, MODE_PRIVATE)
-        val uri = prefs.getString(MonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
+        val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
+        val uri = prefs.getString(TradeMonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
             ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
         runCatching {
             val player = MediaPlayer.create(applicationContext, uri) ?: return
