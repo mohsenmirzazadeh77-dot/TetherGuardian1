@@ -9,7 +9,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,7 +28,7 @@ class TradeMonitoringService : Service() {
         const val PREFS = "trade_monitoring_prefs"
         const val KEY_SEVERE_ALERT = "severe_alert_enabled"
         const val KEY_ACTIVE = "trade_monitoring_active"
-        const val KEY_SOUND_URI = "trade_alert_sound_uri"
+        const val KEY_SOUND_URI = "trade_monitoring_sound_uri"
         const val KEY_LAST_SCORE = "last_score"
         const val KEY_LAST_BUY = "last_buy_pressure"
         const val KEY_LAST_SELL = "last_sell_pressure"
@@ -40,14 +39,9 @@ class TradeMonitoringService : Service() {
         const val ACTION_STOP = "com.tetherguardian.app.action.TRADE_MONITOR_STOP"
         const val ACTION_REFRESH = "com.tetherguardian.app.action.TRADE_MONITOR_REFRESH"
         const val ACTION_STATUS_UPDATE = "com.tetherguardian.app.action.TRADE_MONITOR_STATUS_UPDATE"
-        const val EXTRA_SCORE = "score"
-        const val EXTRA_BUY_PRESSURE = "buy_pressure"
-        const val EXTRA_SELL_PRESSURE = "sell_pressure"
-        const val EXTRA_TRADE_COUNT = "trade_count"
-        const val EXTRA_COUNT_1000 = "count_1000"
-        const val EXTRA_REASON = "reason"
         const val ALERT_NOTIFICATION_ID = 4202
         private const val CHANNEL_ID = "trade_monitoring_channel"
+        private const val ALERT_CHANNEL_ID = "trade_monitoring_alert_channel"
         private const val NOTIFICATION_ID = 4201
     }
 
@@ -94,19 +88,43 @@ class TradeMonitoringService : Service() {
             val window = trades.values.filter { toMillis(it.time) >= cutoff }.sortedBy { toMillis(it.time) }
             val buy = window.filter { it.type.equals("buy", true) }.sumOf { it.volume }; val sell = window.filter { it.type.equals("sell", true) }.sumOf { it.volume }; val total = buy + sell
             val buyPct = if (total > 0) buy / total * 100 else 50.0; val sellPct = 100.0 - buyPct
-            val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5); val score = min(100, (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt())
-            val largeCount = window.count { it.volume >= 1000.0 }; val reason = if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود"
+            val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
+            val baseScore = (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt()
+            val largeCount = window.count { it.volume >= 1000.0 }
+            // Keep the existing score logic; only treat a clear concentration of large trades as a severe anomaly.
+            val score = if (largeCount >= 5) max(baseScore, 70) else baseScore
+            val reason = if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود"
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(KEY_LAST_SCORE, score).putString(KEY_LAST_BUY, buyPct.toString()).putString(KEY_LAST_SELL, sellPct.toString()).putInt(KEY_LAST_COUNT, window.size).putInt(KEY_LAST_COUNT_1000, largeCount).putString(KEY_LAST_REASON, reason).apply()
             updateNotification("وضعیت: ${state(score)} • ${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount")
             sendStatus(score, buyPct, sellPct, window.size, largeCount, reason)
             val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
             if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && score >= 70 && !severeAlreadyShown) {
                 severeAlreadyShown = true
-                val alert = Intent(this, TradeMonitoringAlertActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP; putExtra("score", score); putExtra("reason", reason); putExtra("buy_pressure", buyPct); putExtra("sell_pressure", sellPct); putExtra("trade_count", window.size); putExtra("count_1000", largeCount) }
-                ContextCompat.startActivity(this, alert, null)
+                showSevereAlert(score, reason, buyPct, sellPct, window.size, largeCount)
             }
             if (score < 60) severeAlreadyShown = false
         }
+    }
+
+    private fun showSevereAlert(score: Int, reason: String, buyPct: Double, sellPct: Double, count: Int, count1000: Int) {
+        val activityIntent = Intent(this, TradeMonitoringAlertActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("score", score); putExtra("reason", reason); putExtra("buy_pressure", buyPct); putExtra("sell_pressure", sellPct); putExtra("trade_count", count); putExtra("count_1000", count1000)
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 4203, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_tether_eye)
+            .setContentTitle("نگهبان تتر • هشدار شدید معاملات")
+            .setContentText(reason)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
     }
 
     private fun sendStatus(score: Int, buyPct: Double, sellPct: Double, count: Int, count1000: Int, reason: String) {
@@ -114,8 +132,14 @@ class TradeMonitoringService : Service() {
     }
     private fun state(score: Int) = when { score >= 70 -> "هشدار شدید"; score >= 50 -> "غیرعادی"; score >= 30 -> "تحت نظر"; else -> "عادی" }
     private fun toMillis(value: Long) = if (value < 10_000_000_000L) value * 1000L else value
-    private fun createChannel() { if (Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) }) }
-    private fun buildNotification(text: String): Notification = NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_tether_eye).setContentTitle("نگهبان تتر • مانیتورینگ معاملات").setContentText(text).setOngoing(true).setNumber(0).setContentIntent(PendingIntent.getActivity(this, 4202, Intent(this, TradeMonitoringActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)).build()
+    private fun createChannel() {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+            manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL_ID, "هشدار شدید معاملات", NotificationManager.IMPORTANCE_HIGH).apply { setShowBadge(false); lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC; setSound(null, null) })
+        }
+    }
+    private fun buildNotification(text: String): Notification = NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_tether_eye).setContentTitle("نگهبان تتر • مانیتورینگ معاملات").setContentText(text).setOngoing(true).setNumber(0).setShowWhen(false).setContentIntent(PendingIntent.getActivity(this, 4202, Intent(this, TradeMonitoringActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build()
     private fun updateNotification(text: String) = getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() { job?.cancel(); scope.cancel(); super.onDestroy() }
