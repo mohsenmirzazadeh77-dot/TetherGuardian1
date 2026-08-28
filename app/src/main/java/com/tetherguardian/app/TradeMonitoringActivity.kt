@@ -57,19 +57,14 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != TradeMonitoringService.ACTION_STATUS_UPDATE) return
-            val score = intent.getIntExtra(TradeMonitoringService.EXTRA_SCORE, 0)
-            val buyPct = intent.getDoubleExtra(TradeMonitoringService.EXTRA_BUY_PRESSURE, 50.0)
-            val sellPct = intent.getDoubleExtra(TradeMonitoringService.EXTRA_SELL_PRESSURE, 50.0)
-            val count = intent.getIntExtra(TradeMonitoringService.EXTRA_TRADE_COUNT, 0)
-            val count1000 = intent.getIntExtra(TradeMonitoringService.EXTRA_COUNT_1000, 0)
-            val reason = intent.getStringExtra(TradeMonitoringService.EXTRA_REASON) ?: ""
-            statusText.text = when { score >= 70 && severeAlertSwitch.isChecked -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }
-            scoreText.text = "$score/100"
-            buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"
-            sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"
-            speedText.text = "تعداد معاملات ۵ دقیقه اخیر: $count"
-            largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
-            if (score >= 70) reasonText.text = reason
+            applyStatus(
+                intent.getIntExtra(TradeMonitoringService.EXTRA_SCORE, 0),
+                intent.getDoubleExtra(TradeMonitoringService.EXTRA_BUY_PRESSURE, 50.0),
+                intent.getDoubleExtra(TradeMonitoringService.EXTRA_SELL_PRESSURE, 50.0),
+                intent.getIntExtra(TradeMonitoringService.EXTRA_TRADE_COUNT, 0),
+                intent.getIntExtra(TradeMonitoringService.EXTRA_COUNT_1000, 0),
+                intent.getStringExtra(TradeMonitoringService.EXTRA_REASON) ?: ""
+            )
         }
     }
 
@@ -83,6 +78,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
         severeAlertSwitch.setOnCheckedChangeListener { _, enabled -> prefs.edit().putBoolean(TradeMonitoringService.KEY_SEVERE_ALERT, enabled).apply() }
         findViewById<Button>(R.id.tradeAlertSoundButton).setOnClickListener { openSoundPicker() }
         refreshButton.setOnClickListener { refreshOnce() }
+        loadLastStatus()
         refreshJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive) { refreshOnce(); delay(10_000) }
         }
@@ -92,6 +88,30 @@ class TradeMonitoringActivity : AppCompatActivity() {
         super.onStart()
         val filter = IntentFilter(TradeMonitoringService.ACTION_STATUS_UPDATE)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(statusReceiver, filter)
+        loadLastStatus()
+    }
+
+    private fun loadLastStatus() {
+        val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
+        if (!prefs.contains(TradeMonitoringService.KEY_LAST_SCORE)) return
+        applyStatus(
+            prefs.getInt(TradeMonitoringService.KEY_LAST_SCORE, 0),
+            prefs.getString(TradeMonitoringService.KEY_LAST_BUY, "50")?.toDoubleOrNull() ?: 50.0,
+            prefs.getString(TradeMonitoringService.KEY_LAST_SELL, "50")?.toDoubleOrNull() ?: 50.0,
+            prefs.getInt(TradeMonitoringService.KEY_LAST_COUNT, 0),
+            prefs.getInt(TradeMonitoringService.KEY_LAST_COUNT_1000, 0),
+            prefs.getString(TradeMonitoringService.KEY_LAST_REASON, "") ?: ""
+        )
+    }
+
+    private fun applyStatus(score: Int, buyPct: Double, sellPct: Double, count: Int, count1000: Int, reason: String) {
+        statusText.text = when { score >= 70 && severeAlertSwitch.isChecked -> "🟠 هشدار شدید"; score >= 50 -> "🟠 غیرعادی"; score >= 30 -> "🟡 تحت نظر"; else -> "🟢 عادی" }
+        scoreText.text = "$score/100"
+        buyPressureText.text = "فشار خرید: ${numberFormat.format(buyPct)}٪"
+        sellPressureText.text = "فشار فروش: ${numberFormat.format(sellPct)}٪"
+        speedText.text = "تعداد معاملات ۵ دقیقه اخیر: $count"
+        largeCountText.text = "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
+        if (reason.isNotBlank()) reasonText.text = reason
     }
 
     override fun onStop() {
