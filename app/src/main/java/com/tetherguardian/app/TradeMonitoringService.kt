@@ -136,8 +136,6 @@ class TradeMonitoringService : Service() {
             val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val baseScore = (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt()
 
-            // معاملات بزرگ: آستانه اصلی ۱۰۰۰ تتر و آستانه اصلی هشدار ۵ معامله است.
-            // اثر کمکی برای ۱ تا ۴ معامله، جهت خرید/فروش و حجم معامله بسیار بزرگ نیز لحاظ می‌شود.
             val largeTrades = window.filter { it.volume >= 1000.0 }
             val largeCount = largeTrades.size
             val largeBuyVolume = largeTrades.filter { it.type.equals("buy", true) }.sumOf { it.volume }
@@ -155,7 +153,7 @@ class TradeMonitoringService : Service() {
 
             var score = baseScore + auxiliaryLargeBonus + largeDirectionBonus + largeSizeBonus
             if (largeCount >= 5) score = max(score, 70.0)
-            score = min(100.0, score).toInt()
+            score = min(100.0, score.toDouble()).toInt()
 
             val reason = if (largeTotalVolume > 0 && largeBuyVolume > largeSellVolume) {
                 "فشار خرید قوی در معاملات بزرگ"
@@ -222,8 +220,6 @@ class TradeMonitoringService : Service() {
             .build()
         getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
 
-        // حتی اگر Activity به هر دلیل نمایش داده نشود، پس از پایان چرخه ۱۰ ثانیه‌ای
-        // امکان فعال‌شدن مجدد هشدار باقی می‌ماند.
         severeRearmJob?.cancel()
         severeRearmJob = scope.launch {
             delay(11_000L)
