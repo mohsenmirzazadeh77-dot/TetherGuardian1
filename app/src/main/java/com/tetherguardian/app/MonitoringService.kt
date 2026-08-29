@@ -18,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
@@ -97,7 +96,7 @@ class MonitoringService : Service() {
     private fun startPriceLoop() {
         if (monitoringJob?.isActive == true) return
         monitoringJob = serviceScope.launch {
-            while (isActive) {
+            while (true) {
                 fetchAndProcessPrice()
                 delay(10_000)
             }
