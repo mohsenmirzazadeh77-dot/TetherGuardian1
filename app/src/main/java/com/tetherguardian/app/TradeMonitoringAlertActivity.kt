@@ -34,6 +34,7 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
             stopSound()
             getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
             handler.removeCallbacks(endDisplay)
+            notifyAlertFinished()
             startActivity(Intent(this, TradeMonitoringActivity::class.java))
             finish()
         }
@@ -64,6 +65,10 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         alertPlayer = null
     }
 
+    private fun notifyAlertFinished() {
+        sendBroadcast(Intent(TradeMonitoringService.ACTION_ALERT_FINISHED).apply { setPackage(packageName) })
+    }
+
     private fun acknowledgeAndClose() {
         if (acknowledged) return
         acknowledged = true
@@ -71,9 +76,10 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         handler.removeCallbacks(endDisplay)
         stopSound()
         getSystemService(android.app.NotificationManager::class.java).cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
+        notifyAlertFinished()
         finish()
     }
 
     override fun onBackPressed() { acknowledgeAndClose() }
-    override fun onDestroy() { handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacks(stopSoundRunnable); handler.removeCallbacks(endDisplay); stopSound(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); notifyAlertFinished(); super.onDestroy() }
 }
