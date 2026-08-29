@@ -218,3 +218,171 @@ class MonitoringService : Service() {
         getSystemService(NotificationManager::class.java)
             .cancel(ALERT_NOTIFICATION_ID)
     }
+
+    private fun acknowledgeAlert() {
+        alertAcknowledged = true
+        alertJob?.cancel()
+        alertJob = null
+        stopAlertSound()
+        dismissAlertSurface()
+    }
+
+    private fun markActive() {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit().putBoolean(KEY_ACTIVE, true).apply()
+    }
+
+    private fun stopMonitoring() {
+        monitoringJob?.cancel()
+        monitoringJob = null
+        alertJob?.cancel()
+        alertJob = null
+        alertAcknowledged = true
+        stopAlertSound()
+        dismissAlertSurface()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun buildMonitoringNotification(price: Double?, dropLimit: Double?): Notification {
+        val contentText = if (price != null && price > 0.0 && dropLimit != null && dropLimit > 0.0) {
+            "قیمت لحظه‌ای: ${formatNotificationPrice(price)} تومان | حد هشدار: ${formatNotificationPrice(dropLimit)} تومان"
+        } else {
+            "در حال دریافت قیمت از نوبیتکس..."
+        }
+
+        val mainIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val mainPendingIntent = PendingIntent.getActivity(
+            this,
+            1000,
+            mainIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_popup_sync)
+            .setContentTitle("نگهبان تتر — پایش فعال")
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+            .setContentIntent(mainPendingIntent)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .build()
+    }
+
+    private fun updateMonitoringNotification(price: Double, dropLimit: Double) {
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            buildMonitoringNotification(price, dropLimit)
+        )
+    }
+
+    private fun formatNotificationPrice(value: Double): String = priceFormatter.format(value)
+
+    private fun createNotificationChannels() {
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val monitoringChannel = NotificationChannel(
+            CHANNEL_ID,
+            "پایش قیمت تتر",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "اعلان دائمی هنگام فعال بودن پایش قیمت تتر"
+            setShowBadge(false)
+        }
+        manager.createNotificationChannel(monitoringChannel)
+        recreateAlertChannel()
+    }
+
+    private fun recreateAlertChannel() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.deleteNotificationChannel(ALERT_CHANNEL_ID)
+
+        val alertChannel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "هشدارهای ریزش تتر",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "هشدار صوتی و نمایشی ریزش قیمت تتر"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 300, 700, 300, 900)
+            setSound(null, null)
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+        }
+        manager.createNotificationChannel(alertChannel)
+    }
+
+    private fun selectedSoundUri(): Uri {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val savedUri = prefs.getString(KEY_SOUND_URI, null)
+        if (!savedUri.isNullOrBlank()) return Uri.parse(savedUri)
+        return when (prefs.getInt(KEY_SOUND_INDEX, 0)) {
+            1 -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            2 -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            else -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
+    }
+
+    private fun startAlertSound() {
+        stopAlertSound()
+        try {
+            val player = MediaPlayer.create(applicationContext, selectedSoundUri()) ?: return
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            player.isLooping = true
+            alertPlayer = player
+            player.start()
+        } catch (_: Exception) {
+            stopAlertSound()
+        }
+    }
+
+    private fun stopAlertSound() {
+        try {
+            alertPlayer?.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            alertPlayer?.release()
+        } catch (_: Exception) {
+        }
+        alertPlayer = null
+    }
+
+    private fun testSelectedSound() {
+        serviceScope.launch(Dispatchers.Main) {
+            try {
+                val player = MediaPlayer.create(applicationContext, selectedSoundUri()) ?: return@launch
+                player.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                player.start()
+                delay(5_000)
+                try { player.stop() } catch (_: Exception) { }
+                player.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        monitoringJob?.cancel()
+        alertJob?.cancel()
+        stopAlertSound()
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
