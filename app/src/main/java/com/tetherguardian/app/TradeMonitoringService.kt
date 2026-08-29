@@ -39,6 +39,7 @@ class TradeMonitoringService : Service() {
         const val ACTION_STOP = "com.tetherguardian.app.action.TRADE_MONITOR_STOP"
         const val ACTION_REFRESH = "com.tetherguardian.app.action.TRADE_MONITOR_REFRESH"
         const val ACTION_STATUS_UPDATE = "com.tetherguardian.app.action.TRADE_MONITOR_STATUS_UPDATE"
+        const val ACTION_ALERT_FINISHED = "com.tetherguardian.app.action.TRADE_MONITOR_ALERT_FINISHED"
         const val ALERT_NOTIFICATION_ID = 4202
         private const val CHANNEL_ID = "trade_monitoring_channel"
         private const val ALERT_CHANNEL_ID = "trade_monitoring_alert_channel"
@@ -58,7 +59,14 @@ class TradeMonitoringService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) { ACTION_STOP -> { stopMonitoring(); return START_NOT_STICKY }; ACTION_START, ACTION_REFRESH, null -> startMonitoring() }
+        when (intent?.action) {
+            ACTION_STOP -> { stopMonitoring(); return START_NOT_STICKY }
+            ACTION_ALERT_FINISHED -> {
+                severeAlreadyShown = false
+                getSystemService(NotificationManager::class.java).cancel(ALERT_NOTIFICATION_ID)
+            }
+            ACTION_START, ACTION_REFRESH, null -> startMonitoring()
+        }
         return START_STICKY
     }
 
@@ -91,7 +99,6 @@ class TradeMonitoringService : Service() {
             val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val baseScore = (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt()
             val largeCount = window.count { it.volume >= 1000.0 }
-            // Keep the existing score logic; only treat a clear concentration of large trades as a severe anomaly.
             val score = if (largeCount >= 5) max(baseScore, 70) else baseScore
             val reason = if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود"
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(KEY_LAST_SCORE, score).putString(KEY_LAST_BUY, buyPct.toString()).putString(KEY_LAST_SELL, sellPct.toString()).putInt(KEY_LAST_COUNT, window.size).putInt(KEY_LAST_COUNT_1000, largeCount).putString(KEY_LAST_REASON, reason).apply()
