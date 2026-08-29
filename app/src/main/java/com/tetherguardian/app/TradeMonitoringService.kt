@@ -58,6 +58,7 @@ class TradeMonitoringService : Service() {
     private val client = OkHttpClient()
     private val scope = CoroutineScope(Dispatchers.IO)
     private var job: Job? = null
+    private var severeRearmJob: Job? = null
     private val trades = LinkedHashMap<String, Trade>()
     private var severeAlreadyShown = false
     private data class Trade(val time: Long, val price: Double, val volume: Double, val type: String)
@@ -76,6 +77,8 @@ class TradeMonitoringService : Service() {
             }
             ACTION_ALERT_FINISHED -> {
                 severeAlreadyShown = false
+                severeRearmJob?.cancel()
+                severeRearmJob = null
                 getSystemService(NotificationManager::class.java).cancel(ALERT_NOTIFICATION_ID)
             }
             ACTION_START, ACTION_REFRESH, null -> startMonitoring()
@@ -98,6 +101,9 @@ class TradeMonitoringService : Service() {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         job?.cancel()
         job = null
+        severeRearmJob?.cancel()
+        severeRearmJob = null
+        severeAlreadyShown = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -129,9 +135,37 @@ class TradeMonitoringService : Service() {
             val sellPct = 100.0 - buyPct
             val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val baseScore = (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt()
-            val largeCount = window.count { it.volume >= 1000.0 }
-            val score = if (largeCount >= 5) max(baseScore, 70) else baseScore
-            val reason = if (sellPct > buyPct) "افزایش شدید احتمال ریزش" else "افزایش شدید احتمال صعود"
+
+            // معاملات بزرگ: آستانه اصلی ۱۰۰۰ تتر و آستانه اصلی هشدار ۵ معامله است.
+            // اثر کمکی برای ۱ تا ۴ معامله، جهت خرید/فروش و حجم معامله بسیار بزرگ نیز لحاظ می‌شود.
+            val largeTrades = window.filter { it.volume >= 1000.0 }
+            val largeCount = largeTrades.size
+            val largeBuyVolume = largeTrades.filter { it.type.equals("buy", true) }.sumOf { it.volume }
+            val largeSellVolume = largeTrades.filter { it.type.equals("sell", true) }.sumOf { it.volume }
+            val largeTotalVolume = largeBuyVolume + largeSellVolume
+            val largeDirectionStrength = if (largeTotalVolume > 0) {
+                abs(largeBuyVolume - largeSellVolume) / largeTotalVolume
+            } else 0.0
+            val largeDirectionBonus = min(10.0, largeDirectionStrength * 10.0)
+            val maxLargeVolume = largeTrades.maxOfOrNull { it.volume } ?: 0.0
+            val largeSizeBonus = if (maxLargeVolume >= 1000.0) {
+                min(8.0, max(0.0, maxLargeVolume / 1000.0 - 1.0) * 1.5)
+            } else 0.0
+            val auxiliaryLargeBonus = min(8.0, largeCount * 2.0)
+
+            var score = baseScore + auxiliaryLargeBonus + largeDirectionBonus + largeSizeBonus
+            if (largeCount >= 5) score = max(score, 70.0)
+            score = min(100.0, score).toInt()
+
+            val reason = if (largeTotalVolume > 0 && largeBuyVolume > largeSellVolume) {
+                "فشار خرید قوی در معاملات بزرگ"
+            } else if (largeTotalVolume > 0 && largeSellVolume > largeBuyVolume) {
+                "فشار فروش قوی در معاملات بزرگ"
+            } else if (sellPct > buyPct) {
+                "افزایش شدید احتمال ریزش"
+            } else {
+                "افزایش شدید احتمال صعود"
+            }
 
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putInt(KEY_LAST_SCORE, score)
@@ -150,7 +184,11 @@ class TradeMonitoringService : Service() {
                 severeAlreadyShown = true
                 showSevereAlert(score, reason, buyPct, sellPct, window.size, largeCount)
             }
-            if (score < 60) severeAlreadyShown = false
+            if (score < 60) {
+                severeAlreadyShown = false
+                severeRearmJob?.cancel()
+                severeRearmJob = null
+            }
         }
     }
 
@@ -183,6 +221,15 @@ class TradeMonitoringService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
         getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
+
+        // حتی اگر Activity به هر دلیل نمایش داده نشود، پس از پایان چرخه ۱۰ ثانیه‌ای
+        // امکان فعال‌شدن مجدد هشدار باقی می‌ماند.
+        severeRearmJob?.cancel()
+        severeRearmJob = scope.launch {
+            delay(11_000L)
+            severeAlreadyShown = false
+            severeRearmJob = null
+        }
     }
 
     private fun sendStatus(score: Int, buyPct: Double, sellPct: Double, count: Int, count1000: Int, reason: String) {
@@ -248,6 +295,7 @@ class TradeMonitoringService : Service() {
 
     override fun onDestroy() {
         job?.cancel()
+        severeRearmJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
