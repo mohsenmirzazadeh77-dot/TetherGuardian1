@@ -149,11 +149,11 @@ class TradeMonitoringService : Service() {
             val largeSizeBonus = if (maxLargeVolume >= 1000.0) {
                 min(8.0, max(0.0, maxLargeVolume / 1000.0 - 1.0) * 1.5)
             } else 0.0
-            val auxiliaryLargeBonus = min(8.0, largeCount * 2.0)
+            val auxiliaryLargeBonus = min(8.0, largeCount.toDouble() * 2.0)
 
             var score = baseScore + auxiliaryLargeBonus + largeDirectionBonus + largeSizeBonus
             if (largeCount >= 5) score = max(score, 70.0)
-            score = min(100.0, score.toDouble()).toInt()
+            val finalScore = min(100.0, score)
 
             val reason = if (largeTotalVolume > 0 && largeBuyVolume > largeSellVolume) {
                 "فشار خرید قوی در معاملات بزرگ"
@@ -165,8 +165,9 @@ class TradeMonitoringService : Service() {
                 "افزایش شدید احتمال صعود"
             }
 
+            val scoreInt = finalScore.toInt()
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putInt(KEY_LAST_SCORE, score)
+                .putInt(KEY_LAST_SCORE, scoreInt)
                 .putString(KEY_LAST_BUY, buyPct.toString())
                 .putString(KEY_LAST_SELL, sellPct.toString())
                 .putInt(KEY_LAST_COUNT, window.size)
@@ -174,15 +175,15 @@ class TradeMonitoringService : Service() {
                 .putString(KEY_LAST_REASON, reason)
                 .apply()
 
-            updateNotification("وضعیت: ${state(score)} • ${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount")
-            sendStatus(score, buyPct, sellPct, window.size, largeCount, reason)
+            updateNotification("وضعیت: ${state(scoreInt)} • ${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount")
+            sendStatus(scoreInt, buyPct, sellPct, window.size, largeCount, reason)
 
             val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-            if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && score >= 70 && !severeAlreadyShown) {
+            if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && scoreInt >= 70 && !severeAlreadyShown) {
                 severeAlreadyShown = true
-                showSevereAlert(score, reason, buyPct, sellPct, window.size, largeCount)
+                showSevereAlert(scoreInt, reason, buyPct, sellPct, window.size, largeCount)
             }
-            if (score < 60) {
+            if (scoreInt < 60) {
                 severeAlreadyShown = false
                 severeRearmJob?.cancel()
                 severeRearmJob = null
@@ -200,12 +201,7 @@ class TradeMonitoringService : Service() {
             putExtra(EXTRA_TRADE_COUNT, count)
             putExtra(EXTRA_COUNT_1000, count1000)
         }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            4203,
-            activityIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = PendingIntent.getActivity(this, 4203, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_tether_eye)
             .setContentTitle("نگهبان تتر • هشدار شدید معاملات")
@@ -252,18 +248,12 @@ class TradeMonitoringService : Service() {
     private fun createChannel() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW).apply {
-                    setShowBadge(false)
-                }
-            )
-            manager.createNotificationChannel(
-                NotificationChannel(ALERT_CHANNEL_ID, "هشدار شدید معاملات", NotificationManager.IMPORTANCE_HIGH).apply {
-                    setShowBadge(false)
-                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                    setSound(null, null)
-                }
-            )
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "مانیتورینگ معاملات", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+            manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL_ID, "هشدار شدید معاملات", NotificationManager.IMPORTANCE_HIGH).apply {
+                setShowBadge(false)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                setSound(null, null)
+            })
         }
     }
 
@@ -274,18 +264,10 @@ class TradeMonitoringService : Service() {
         .setOngoing(true)
         .setNumber(0)
         .setShowWhen(false)
-        .setContentIntent(
-            PendingIntent.getActivity(
-                this,
-                4202,
-                Intent(this, TradeMonitoringActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        )
+        .setContentIntent(PendingIntent.getActivity(this, 4202, Intent(this, TradeMonitoringActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         .build()
 
-    private fun updateNotification(text: String) =
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
+    private fun updateNotification(text: String) = getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
 
     override fun onBind(intent: Intent?): IBinder? = null
 
