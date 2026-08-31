@@ -76,9 +76,6 @@ class TradeMonitoringService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_ALERT_FINISHED -> {
-                severeAlreadyShown = false
-                severeRearmJob?.cancel()
-                severeRearmJob = null
                 getSystemService(NotificationManager::class.java).cancel(ALERT_NOTIFICATION_ID)
             }
             ACTION_START, ACTION_REFRESH, null -> startMonitoring()
@@ -134,6 +131,11 @@ class TradeMonitoringService : Service() {
             val total = buy + sell
             val buyPct = if (total > 0) buy / total * 100 else 50.0
             val sellPct = 100.0 - buyPct
+            val buyTradeCount = window.count { it.type.equals("buy", true) }
+            val sellTradeCount = window.count { it.type.equals("sell", true) }
+            val tradeCountTotal = buyTradeCount + sellTradeCount
+            val buyTradePct = if (tradeCountTotal > 0) buyTradeCount.toDouble() / tradeCountTotal * 100 else 50.0
+            val sellTradePct = 100.0 - buyTradePct
             val activity = min(45.0, max(0.0, window.size.toDouble() - 20.0) * 1.5)
             val baseScore = (min(55.0, abs(buyPct - sellPct) * 1.1) + activity).toInt()
 
@@ -142,6 +144,11 @@ class TradeMonitoringService : Service() {
             val largeBuyVolume = largeTrades.filter { it.type.equals("buy", true) }.sumOf { it.volume }
             val largeSellVolume = largeTrades.filter { it.type.equals("sell", true) }.sumOf { it.volume }
             val largeTotalVolume = largeBuyVolume + largeSellVolume
+            val largeBuyCount = largeTrades.count { it.type.equals("buy", true) }
+            val largeSellCount = largeTrades.count { it.type.equals("sell", true) }
+            val largeTradeCountTotal = largeBuyCount + largeSellCount
+            val largeBuyTradePct = if (largeTradeCountTotal > 0) largeBuyCount.toDouble() / largeTradeCountTotal * 100 else 0.0
+            val largeSellTradePct = if (largeTradeCountTotal > 0) largeSellCount.toDouble() / largeTradeCountTotal * 100 else 0.0
             val largeDirectionStrength = if (largeTotalVolume > 0) {
                 abs(largeBuyVolume - largeSellVolume) / largeTotalVolume
             } else 0.0
@@ -152,18 +159,21 @@ class TradeMonitoringService : Service() {
             } else 0.0
             val auxiliaryLargeBonus = min(8.0, largeCount.toDouble() * 2.0)
 
+            val severeBuyCondition = buyTradePct >= 70.0 && largeTradeCountTotal > 0 && largeBuyTradePct >= 70.0
+            val severeSellCondition = sellTradePct >= 70.0 && largeTradeCountTotal > 0 && largeSellTradePct >= 70.0
+            val severeCondition = severeBuyCondition || severeSellCondition
+
             var score = baseScore + auxiliaryLargeBonus + largeDirectionBonus + largeSizeBonus
-            if (largeCount >= 5) score = max(score, 70.0)
+            if (severeCondition) score = max(score, 70.0)
             val finalScore = min(100.0, score)
 
-            val reason = if (largeTotalVolume > 0 && largeBuyVolume > largeSellVolume) {
-                "فشار خرید قوی در معاملات بزرگ"
-            } else if (largeTotalVolume > 0 && largeSellVolume > largeBuyVolume) {
-                "فشار فروش قوی در معاملات بزرگ"
-            } else if (sellPct > buyPct) {
-                "افزایش شدید احتمال ریزش"
-            } else {
-                "افزایش شدید احتمال صعود"
+            val reason = when {
+                severeBuyCondition -> "تمایل شدید خرید در معاملات و معاملات بزرگ"
+                severeSellCondition -> "تمایل شدید فروش در معاملات و معاملات بزرگ"
+                largeTotalVolume > 0 && largeBuyVolume > largeSellVolume -> "فشار خرید قوی در معاملات بزرگ"
+                largeTotalVolume > 0 && largeSellVolume > largeBuyVolume -> "فشار فروش قوی در معاملات بزرگ"
+                sellPct > buyPct -> "افزایش شدید احتمال ریزش"
+                else -> "افزایش شدید احتمال صعود"
             }
 
             val scoreInt = finalScore.toInt()
@@ -180,11 +190,14 @@ class TradeMonitoringService : Service() {
             sendStatus(scoreInt, buyPct, sellPct, window.size, largeCount, reason)
 
             val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-            if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && scoreInt >= 70 && !severeAlreadyShown) {
+            if (prefs.getBoolean(KEY_SEVERE_ALERT, true) && severeCondition && !severeAlreadyShown) {
                 severeAlreadyShown = true
                 showSevereAlert(scoreInt, reason, buyPct, sellPct, window.size, largeCount)
             }
-            if (scoreInt < 60) {
+
+            // The 10-second alert display may end, but the underlying severe event
+            // stays acknowledged until the severe condition actually clears.
+            if (!severeCondition) {
                 severeAlreadyShown = false
                 severeRearmJob?.cancel()
                 severeRearmJob = null
@@ -222,7 +235,6 @@ class TradeMonitoringService : Service() {
         severeRearmJob = scope.launch {
             delay(10_000L)
             manager.cancel(ALERT_NOTIFICATION_ID)
-            severeAlreadyShown = false
             severeRearmJob = null
         }
     }
