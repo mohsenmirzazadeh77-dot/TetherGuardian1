@@ -104,6 +104,7 @@ class TradeMonitoringService : Service() {
         severeRearmJob?.cancel()
         severeRearmJob = null
         severeAlreadyShown = false
+        getSystemService(NotificationManager::class.java).cancel(ALERT_NOTIFICATION_ID)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -208,17 +209,19 @@ class TradeMonitoringService : Service() {
             .setContentText(reason)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setOngoing(true)
-            .setAutoCancel(false)
+            .setOngoing(false)
+            .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
-        getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(ALERT_NOTIFICATION_ID, notification)
 
         severeRearmJob?.cancel()
         severeRearmJob = scope.launch {
-            delay(11_000L)
+            delay(10_000L)
+            manager.cancel(ALERT_NOTIFICATION_ID)
             severeAlreadyShown = false
             severeRearmJob = null
         }
