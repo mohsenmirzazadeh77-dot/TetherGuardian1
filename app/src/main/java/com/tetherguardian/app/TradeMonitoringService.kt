@@ -94,11 +94,10 @@ class TradeMonitoringService : Service() {
 
             ACTION_ALERT_FINISHED -> {
                 /*
-                 * پایان چرخه نمایش ۱۰ ثانیه‌ای.
-                 * اجازه هشدار بعدی داده می‌شود.
+                 * فقط اعلان سیستم بسته می‌شود.
+                 * severeAlreadyShown عمداً reset نمی‌شود؛
+                 * چون ممکن است همان وضعیت شدید هنوز ادامه داشته باشد.
                  */
-                severeAlreadyShown = false
-
                 getSystemService(NotificationManager::class.java)
                     .cancel(ALERT_NOTIFICATION_ID)
             }
