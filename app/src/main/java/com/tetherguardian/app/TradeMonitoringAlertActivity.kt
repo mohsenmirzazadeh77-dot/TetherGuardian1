@@ -17,7 +17,17 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
     private var acknowledged = false
     private var alertPlayer: MediaPlayer? = null
     private val stopSoundRunnable = Runnable { stopSound() }
-    private val endDisplay = Runnable { if (!acknowledged) { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); finish() } }
+    private val endDisplay = Runnable {
+        if (!acknowledged) {
+            acknowledged = true
+            stopSound()
+            getSystemService(android.app.NotificationManager::class.java)
+                .cancel(TradeMonitoringService.ALERT_NOTIFICATION_ID)
+            notifyAlertFinished()
+        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
