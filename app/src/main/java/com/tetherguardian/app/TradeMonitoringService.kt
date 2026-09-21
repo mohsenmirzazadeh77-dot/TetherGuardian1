@@ -39,12 +39,17 @@ class TradeMonitoringService : Service() {
         const val KEY_LAST_COUNT = "last_trade_count"
         const val KEY_LAST_COUNT_1000 = "last_count_1000"
         const val KEY_LAST_REASON = "last_reason"
+        const val KEY_LAST_SUPPORT_BLOCK_PRICE = "last_support_block_price"
+        const val KEY_LAST_SUPPORT_BLOCK_VOLUME = "last_support_block_volume"
+        const val KEY_LAST_RESISTANCE_BLOCK_PRICE = "last_resistance_block_price"
+        const val KEY_LAST_RESISTANCE_BLOCK_VOLUME = "last_resistance_block_volume"
 
         const val ACTION_START = "com.tetherguardian.app.action.TRADE_MONITOR_START"
         const val ACTION_STOP = "com.tetherguardian.app.action.TRADE_MONITOR_STOP"
         const val ACTION_REFRESH = "com.tetherguardian.app.action.TRADE_MONITOR_REFRESH"
         const val ACTION_STATUS_UPDATE = "com.tetherguardian.app.action.TRADE_MONITOR_STATUS_UPDATE"
         const val ACTION_ALERT_FINISHED = "com.tetherguardian.app.action.TRADE_MONITOR_ALERT_FINISHED"
+        const val ACTION_RECALCULATE_BLOCKS = "com.tetherguardian.app.action.TRADE_MONITOR_RECALCULATE_BLOCKS"
 
         const val EXTRA_SCORE = "score"
         const val EXTRA_BUY_PRESSURE = "buy_pressure"
@@ -55,6 +60,10 @@ class TradeMonitoringService : Service() {
         const val EXTRA_ALERT_TYPE = "alert_type"
         const val EXTRA_BLOCK_PRICE = "block_price"
         const val EXTRA_BLOCK_TYPE = "block_type"
+        const val EXTRA_SUPPORT_BLOCK_PRICE = "support_block_price"
+        const val EXTRA_SUPPORT_BLOCK_VOLUME = "support_block_volume"
+        const val EXTRA_RESISTANCE_BLOCK_PRICE = "resistance_block_price"
+        const val EXTRA_RESISTANCE_BLOCK_VOLUME = "resistance_block_volume"
         const val ALERT_TYPE_SEVERE = "severe"
         const val ALERT_TYPE_VERY_SEVERE = "very_severe"
 
@@ -102,6 +111,7 @@ class TradeMonitoringService : Service() {
     private var resistanceBlock: TrackedBlock? = null
     private var supportBlock: TrackedBlock? = null
     private var previousOrderBookPrice: Double? = null
+    private var lastLiveTradePrice: Double? = null
 
     private data class Trade(
         val time: Long,
@@ -134,6 +144,12 @@ class TradeMonitoringService : Service() {
                  */
                 getSystemService(NotificationManager::class.java)
                     .cancel(ALERT_NOTIFICATION_ID)
+            }
+
+            ACTION_RECALCULATE_BLOCKS -> {
+                scope.launch {
+                    recalculateOrderBlocks()
+                }
             }
 
             ACTION_START,
@@ -223,11 +239,14 @@ class TradeMonitoringService : Service() {
 
             if (window.isEmpty()) return
 
+            val currentLivePrice = window.last().price
+            lastLiveTradePrice = currentLivePrice
+
             val orderBook = fetchOrderBook()
             val blockCollapse =
                 orderBook?.let {
                     updateOrderBlocks(
-                        currentPrice = window.last().price,
+                        currentPrice = currentLivePrice,
                         asks = it.asks,
                         bids = it.bids
                     )
@@ -638,6 +657,25 @@ class TradeMonitoringService : Service() {
                 .putString(KEY_LAST_REASON, reason)
                 .apply()
 
+            val supportVolume = orderBook?.let { book ->
+                supportBlock?.let { block ->
+                    volumeAtPrice(book.bids, block.price)
+                }
+            }
+
+            val resistanceVolume = orderBook?.let { book ->
+                resistanceBlock?.let { block ->
+                    volumeAtPrice(book.asks, block.price)
+                }
+            }
+
+            saveBlockStatus(
+                supportBlock?.price,
+                supportVolume,
+                resistanceBlock?.price,
+                resistanceVolume
+            )
+
             updateNotification(
                 "وضعیت: ${state(scoreInt)} • " +
                     "${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount"
@@ -649,7 +687,11 @@ class TradeMonitoringService : Service() {
                 sellPct,
                 window.size,
                 largeCount,
-                reason
+                reason,
+                supportBlock?.price,
+                supportVolume,
+                resistanceBlock?.price,
+                resistanceVolume
             )
 
             val prefs =
@@ -787,7 +829,7 @@ class TradeMonitoringService : Service() {
 
             if (
                 currentVolume <= block.baselineVolume * 0.10 &&
-                movedTowardResistance(previousPrice, currentPrice, block.price)
+                currentPrice >= block.price
             ) {
                 orderBlockBasePrice = block.price
                 resistanceBlock = findFirstBlock(asks, block.price, true)
@@ -803,7 +845,7 @@ class TradeMonitoringService : Service() {
 
             if (
                 currentVolume <= block.baselineVolume * 0.10 &&
-                movedTowardSupport(previousPrice, currentPrice, block.price)
+                currentPrice <= block.price
             ) {
                 orderBlockBasePrice = block.price
                 resistanceBlock = findFirstBlock(asks, block.price, true)
@@ -873,38 +915,6 @@ class TradeMonitoringService : Service() {
         levels
             .filter { it.price == price }
             .sumOf { it.volume }
-
-    private fun movedTowardResistance(
-        previousPrice: Double?,
-        currentPrice: Double,
-        blockPrice: Double
-    ): Boolean {
-        val previous = previousPrice ?: return false
-        val crossed = previous < blockPrice && currentPrice >= blockPrice
-        val distanceReduced =
-            previous < blockPrice &&
-                currentPrice > previous &&
-                kotlin.math.abs(blockPrice - currentPrice) <
-                    kotlin.math.abs(blockPrice - previous)
-
-        return crossed || distanceReduced
-    }
-
-    private fun movedTowardSupport(
-        previousPrice: Double?,
-        currentPrice: Double,
-        blockPrice: Double
-    ): Boolean {
-        val previous = previousPrice ?: return false
-        val crossed = previous > blockPrice && currentPrice <= blockPrice
-        val distanceReduced =
-            previous > blockPrice &&
-                currentPrice < previous &&
-                kotlin.math.abs(blockPrice - currentPrice) <
-                    kotlin.math.abs(blockPrice - previous)
-
-        return crossed || distanceReduced
-    }
 
     private fun showVerySevereAlert(
         score: Int,
@@ -1051,34 +1061,78 @@ class TradeMonitoringService : Service() {
         sellPct: Double,
         count: Int,
         count1000: Int,
-        reason: String
+        reason: String,
+        supportPrice: Double?,
+        supportVolume: Double?,
+        resistancePrice: Double?,
+        resistanceVolume: Double?
     ) {
         sendBroadcast(
             Intent(ACTION_STATUS_UPDATE).apply {
                 setPackage(packageName)
-
                 putExtra(EXTRA_SCORE, score)
-                putExtra(
-                    EXTRA_BUY_PRESSURE,
-                    buyPct
-                )
-                putExtra(
-                    EXTRA_SELL_PRESSURE,
-                    sellPct
-                )
-                putExtra(
-                    EXTRA_TRADE_COUNT,
-                    count
-                )
-                putExtra(
-                    EXTRA_COUNT_1000,
-                    count1000
-                )
-                putExtra(
-                    EXTRA_REASON,
-                    reason
-                )
+                putExtra(EXTRA_BUY_PRESSURE, buyPct)
+                putExtra(EXTRA_SELL_PRESSURE, sellPct)
+                putExtra(EXTRA_TRADE_COUNT, count)
+                putExtra(EXTRA_COUNT_1000, count1000)
+                putExtra(EXTRA_REASON, reason)
+                if (supportPrice != null) putExtra(EXTRA_SUPPORT_BLOCK_PRICE, supportPrice)
+                if (supportVolume != null) putExtra(EXTRA_SUPPORT_BLOCK_VOLUME, supportVolume)
+                if (resistancePrice != null) putExtra(EXTRA_RESISTANCE_BLOCK_PRICE, resistancePrice)
+                if (resistanceVolume != null) putExtra(EXTRA_RESISTANCE_BLOCK_VOLUME, resistanceVolume)
             }
+        )
+    }
+
+    private fun saveBlockStatus(
+        supportPrice: Double?,
+        supportVolume: Double?,
+        resistancePrice: Double?,
+        resistanceVolume: Double?
+    ) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().apply {
+            if (supportPrice != null) putString(KEY_LAST_SUPPORT_BLOCK_PRICE, supportPrice.toString())
+            else remove(KEY_LAST_SUPPORT_BLOCK_PRICE)
+            if (supportVolume != null) putString(KEY_LAST_SUPPORT_BLOCK_VOLUME, supportVolume.toString())
+            else remove(KEY_LAST_SUPPORT_BLOCK_VOLUME)
+            if (resistancePrice != null) putString(KEY_LAST_RESISTANCE_BLOCK_PRICE, resistancePrice.toString())
+            else remove(KEY_LAST_RESISTANCE_BLOCK_PRICE)
+            if (resistanceVolume != null) putString(KEY_LAST_RESISTANCE_BLOCK_VOLUME, resistanceVolume.toString())
+            else remove(KEY_LAST_RESISTANCE_BLOCK_VOLUME)
+        }.apply()
+    }
+
+    private fun recalculateOrderBlocks() {
+        val currentPrice = lastLiveTradePrice ?: return
+        val orderBook = fetchOrderBook() ?: return
+
+        orderBlockBasePrice = currentPrice
+        resistanceBlock = findFirstBlock(orderBook.asks, currentPrice, true)
+        supportBlock = findFirstBlock(orderBook.bids, currentPrice, false)
+        previousOrderBookPrice = currentPrice
+
+        val supportVolume = supportBlock?.let { volumeAtPrice(orderBook.bids, it.price) }
+        val resistanceVolume = resistanceBlock?.let { volumeAtPrice(orderBook.asks, it.price) }
+
+        saveBlockStatus(
+            supportBlock?.price,
+            supportVolume,
+            resistanceBlock?.price,
+            resistanceVolume
+        )
+
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        sendStatus(
+            prefs.getInt(KEY_LAST_SCORE, 0),
+            prefs.getString(KEY_LAST_BUY, "50")?.toDoubleOrNull() ?: 50.0,
+            prefs.getString(KEY_LAST_SELL, "50")?.toDoubleOrNull() ?: 50.0,
+            prefs.getInt(KEY_LAST_COUNT, 0),
+            prefs.getInt(KEY_LAST_COUNT_1000, 0),
+            prefs.getString(KEY_LAST_REASON, "") ?: "",
+            supportBlock?.price,
+            supportVolume,
+            resistanceBlock?.price,
+            resistanceVolume
         )
     }
 
