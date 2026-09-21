@@ -53,6 +53,8 @@ class TradeMonitoringService : Service() {
         const val EXTRA_COUNT_1000 = "count_1000"
         const val EXTRA_REASON = "reason"
         const val EXTRA_ALERT_TYPE = "alert_type"
+        const val EXTRA_BLOCK_PRICE = "block_price"
+        const val EXTRA_BLOCK_TYPE = "block_type"
         const val ALERT_TYPE_SEVERE = "severe"
         const val ALERT_TYPE_VERY_SEVERE = "very_severe"
 
@@ -74,6 +76,32 @@ class TradeMonitoringService : Service() {
      * با پایان نمایش هشدار، اجازه نمایش مجدد وجود دارد.
      */
     private var severeAlreadyShown = false
+    private var verySevereAlreadyShown = false
+
+    private data class OrderBookLevel(
+        val price: Double,
+        val volume: Double
+    )
+
+    private data class TrackedBlock(
+        val price: Double,
+        val baselineVolume: Double
+    )
+
+    private data class BlockCollapse(
+        val price: Double,
+        val side: String
+    )
+
+    private data class OrderBook(
+        val asks: List<OrderBookLevel>,
+        val bids: List<OrderBookLevel>
+    )
+
+    private var orderBlockBasePrice: Double? = null
+    private var resistanceBlock: TrackedBlock? = null
+    private var supportBlock: TrackedBlock? = null
+    private var previousOrderBookPrice: Double? = null
 
     private data class Trade(
         val time: Long,
@@ -194,6 +222,16 @@ class TradeMonitoringService : Service() {
                 .sortedBy { toMillis(it.time) }
 
             if (window.isEmpty()) return
+
+            val orderBook = fetchOrderBook()
+            val blockCollapse =
+                orderBook?.let {
+                    updateOrderBlocks(
+                        currentPrice = window.last().price,
+                        asks = it.asks,
+                        bids = it.bids
+                    )
+                }
 
             /*
              * فشار کلی پنج دقیقه اخیر
@@ -617,19 +655,48 @@ class TradeMonitoringService : Service() {
             val prefs =
                 getSharedPreferences(PREFS, MODE_PRIVATE)
 
-            /*
-             * فعال بودن هشدار شدید + وجود وضعیت شدید +
-             * پایان نیافتن چرخه قبلی.
-             */
+            val severeDisplayCondition =
+                severeCondition &&
+                    scoreInt > 80 &&
+                    largeCount >= 5
+
+            val verySevereCondition =
+                severeDisplayCondition &&
+                    blockCollapse != null
+
+            var verySevereShownNow = false
+
+            if (
+                prefs.getBoolean(
+                    KEY_VERY_SEVERE_ALERT,
+                    true
+                ) &&
+                verySevereCondition &&
+                !verySevereAlreadyShown
+            ) {
+                verySevereAlreadyShown = true
+                verySevereShownNow = true
+
+                showVerySevereAlert(
+                    scoreInt,
+                    reason,
+                    buyPct,
+                    sellPct,
+                    window.size,
+                    largeCount,
+                    blockCollapse!!.price,
+                    blockCollapse.side
+                )
+            }
+
             if (
                 prefs.getBoolean(
                     KEY_SEVERE_ALERT,
                     true
                 ) &&
-                severeCondition &&
-                scoreInt > 80 &&
-                largeCount >= 5 &&
-                !severeAlreadyShown
+                severeDisplayCondition &&
+                !severeAlreadyShown &&
+                !verySevereShownNow
             ) {
                 severeAlreadyShown = true
 
@@ -643,14 +710,266 @@ class TradeMonitoringService : Service() {
                 )
             }
 
-            /*
-             * اگر وضعیت شدید کاملاً فروکش کرد،
-             * چرخه برای رویداد بعدی آماده می‌شود.
-             */
-            if (scoreInt < 50) {
+            if (scoreInt < 50 || !severeCondition) {
                 severeAlreadyShown = false
+                verySevereAlreadyShown = false
+            }
+
+            if (!prefs.getBoolean(KEY_VERY_SEVERE_ALERT, true)) {
+                verySevereAlreadyShown = false
             }
         }
+    }
+
+    private fun fetchOrderBook(): OrderBook? {
+        val request = Request.Builder()
+            .url("https://api.nobitex.ir/v3/orderbook/USDTIRT")
+            .build()
+
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+
+                val body = response.body?.string() ?: return@use null
+                val json = JSONObject(body)
+
+                if (json.optString("status") != "ok") {
+                    return@use null
+                }
+
+                fun parseLevels(name: String): List<OrderBookLevel> {
+                    val array = json.optJSONArray(name) ?: return emptyList()
+                    val result = ArrayList<OrderBookLevel>(array.length())
+
+                    for (i in 0 until array.length()) {
+                        val row = array.optJSONArray(i) ?: continue
+                        val price = row.optString(0).toDoubleOrNull() ?: continue
+                        val volume = row.optString(1).toDoubleOrNull() ?: continue
+
+                        if (price > 0.0 && volume >= 0.0) {
+                            result.add(OrderBookLevel(price, volume))
+                        }
+                    }
+
+                    return result
+                }
+
+                OrderBook(
+                    asks = parseLevels("asks"),
+                    bids = parseLevels("bids")
+                )
+            }
+        }.getOrNull()
+    }
+
+    private fun updateOrderBlocks(
+        currentPrice: Double,
+        asks: List<OrderBookLevel>,
+        bids: List<OrderBookLevel>
+    ): BlockCollapse? {
+        if (currentPrice <= 0.0) return null
+
+        val base = orderBlockBasePrice
+
+        if (base == null) {
+            orderBlockBasePrice = currentPrice
+            resistanceBlock = findFirstBlock(asks, currentPrice, true)
+            supportBlock = findFirstBlock(bids, currentPrice, false)
+            previousOrderBookPrice = currentPrice
+            return null
+        }
+
+        val previousPrice = previousOrderBookPrice
+
+        resistanceBlock?.let { block ->
+            val currentVolume = volumeAtPrice(asks, block.price)
+
+            if (
+                currentVolume <= block.baselineVolume * 0.10 &&
+                movedTowardResistance(previousPrice, currentPrice, block.price)
+            ) {
+                orderBlockBasePrice = block.price
+                resistanceBlock = findFirstBlock(asks, block.price, true)
+                supportBlock = findFirstBlock(bids, block.price, false)
+                previousOrderBookPrice = currentPrice
+
+                return BlockCollapse(block.price, "resistance")
+            }
+        }
+
+        supportBlock?.let { block ->
+            val currentVolume = volumeAtPrice(bids, block.price)
+
+            if (
+                currentVolume <= block.baselineVolume * 0.10 &&
+                movedTowardSupport(previousPrice, currentPrice, block.price)
+            ) {
+                orderBlockBasePrice = block.price
+                resistanceBlock = findFirstBlock(asks, block.price, true)
+                supportBlock = findFirstBlock(bids, block.price, false)
+                previousOrderBookPrice = currentPrice
+
+                return BlockCollapse(block.price, "support")
+            }
+        }
+
+        val newResistance = findFirstBlock(asks, base, true)
+        val newSupport = findFirstBlock(bids, base, false)
+
+        if (
+            resistanceBlock == null ||
+            newResistance?.price != resistanceBlock?.price
+        ) {
+            resistanceBlock = newResistance
+        }
+
+        if (
+            supportBlock == null ||
+            newSupport?.price != supportBlock?.price
+        ) {
+            supportBlock = newSupport
+        }
+
+        previousOrderBookPrice = currentPrice
+        return null
+    }
+
+    private fun findFirstBlock(
+        levels: List<OrderBookLevel>,
+        basePrice: Double,
+        above: Boolean
+    ): TrackedBlock? {
+        val aggregated =
+            levels
+                .filter {
+                    if (above) it.price > basePrice else it.price < basePrice
+                }
+                .groupBy { it.price }
+                .map { (price, rows) ->
+                    price to rows.sumOf { it.volume }
+                }
+                .filter { it.second > 20_000.0 }
+                .sortedWith(
+                    if (above) {
+                        compareBy { it.first }
+                    } else {
+                        compareByDescending { it.first }
+                    }
+                )
+
+        val first = aggregated.firstOrNull() ?: return null
+
+        return TrackedBlock(
+            price = first.first,
+            baselineVolume = first.second
+        )
+    }
+
+    private fun volumeAtPrice(
+        levels: List<OrderBookLevel>,
+        price: Double
+    ): Double =
+        levels
+            .filter { it.price == price }
+            .sumOf { it.volume }
+
+    private fun movedTowardResistance(
+        previousPrice: Double?,
+        currentPrice: Double,
+        blockPrice: Double
+    ): Boolean {
+        val previous = previousPrice ?: return false
+        val crossed = previous < blockPrice && currentPrice >= blockPrice
+        val distanceReduced =
+            previous < blockPrice &&
+                currentPrice > previous &&
+                kotlin.math.abs(blockPrice - currentPrice) <
+                    kotlin.math.abs(blockPrice - previous)
+
+        return crossed || distanceReduced
+    }
+
+    private fun movedTowardSupport(
+        previousPrice: Double?,
+        currentPrice: Double,
+        blockPrice: Double
+    ): Boolean {
+        val previous = previousPrice ?: return false
+        val crossed = previous > blockPrice && currentPrice <= blockPrice
+        val distanceReduced =
+            previous > blockPrice &&
+                currentPrice < previous &&
+                kotlin.math.abs(blockPrice - currentPrice) <
+                    kotlin.math.abs(blockPrice - previous)
+
+        return crossed || distanceReduced
+    }
+
+    private fun showVerySevereAlert(
+        score: Int,
+        reason: String,
+        buyPct: Double,
+        sellPct: Double,
+        count: Int,
+        count1000: Int,
+        blockPrice: Double,
+        blockSide: String
+    ) {
+        val activityIntent =
+            Intent(this, TradeMonitoringAlertActivity::class.java).apply {
+                flags =
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+
+                putExtra(EXTRA_SCORE, score)
+                putExtra(EXTRA_REASON, reason)
+                putExtra(EXTRA_BUY_PRESSURE, buyPct)
+                putExtra(EXTRA_SELL_PRESSURE, sellPct)
+                putExtra(EXTRA_TRADE_COUNT, count)
+                putExtra(EXTRA_COUNT_1000, count1000)
+                putExtra(EXTRA_ALERT_TYPE, ALERT_TYPE_VERY_SEVERE)
+                putExtra(EXTRA_BLOCK_PRICE, blockPrice)
+                putExtra(EXTRA_BLOCK_TYPE, blockSide)
+            }
+
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                4204,
+                activityIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE
+            )
+
+        val blockType =
+            if (blockSide == "support") "حمایتی" else "مقاومتی"
+
+        val direction =
+            if (blockSide == "support") "کاهش قیمت" else "افزایش قیمت"
+
+        val blockPriceToman = (blockPrice / 10.0).toLong()
+
+        val title =
+            "هشدار بسیار شدید $direction به دلیل فروپاشی بلوک " +
+                "$blockType " + blockPriceToman + " تومانی"
+
+        val notification =
+            NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_tether_eye)
+                .setContentTitle(title)
+                .setContentText(reason)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setContentIntent(pendingIntent)
+                .setFullScreenIntent(pendingIntent, true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+
+        getSystemService(NotificationManager::class.java)
+            .notify(ALERT_NOTIFICATION_ID, notification)
     }
 
     private fun showSevereAlert(
