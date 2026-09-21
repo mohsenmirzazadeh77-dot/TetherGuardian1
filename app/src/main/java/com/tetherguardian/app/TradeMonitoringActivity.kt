@@ -36,6 +36,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
     companion object {
         private const val SOUND_REQUEST = 4217
+        private const val VERY_SEVERE_SOUND_REQUEST = 4218
     }
 
     private lateinit var statusText: TextView
@@ -50,6 +51,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private lateinit var tradesTable: TableLayout
     private lateinit var refreshButton: Button
     private lateinit var severeAlertSwitch: Switch
+    private lateinit var verySevereAlertSwitch: Switch
 
     private val client = OkHttpClient()
     private var refreshJob: Job? = null
@@ -164,10 +166,41 @@ class TradeMonitoringActivity : AppCompatActivity() {
                 .apply()
         }
 
+        verySevereAlertSwitch.isChecked =
+            prefs.getBoolean(
+                TradeMonitoringService.KEY_VERY_SEVERE_ALERT,
+                true
+            )
+
+        verySevereAlertSwitch.setOnCheckedChangeListener {
+                _,
+                enabled ->
+            prefs.edit()
+                .putBoolean(
+                    TradeMonitoringService.KEY_VERY_SEVERE_ALERT,
+                    enabled
+                )
+                .apply()
+        }
+
         findViewById<Button>(
             R.id.tradeAlertSoundButton
         ).setOnClickListener {
-            openSoundPicker()
+            openSoundPicker(
+                TradeMonitoringService.KEY_SEVERE_SOUND_URI,
+                "انتخاب صدای هشدار شدید",
+                SOUND_REQUEST
+            )
+        }
+
+        findViewById<Button>(
+            R.id.verySevereAlertSoundButton
+        ).setOnClickListener {
+            openSoundPicker(
+                TradeMonitoringService.KEY_VERY_SEVERE_SOUND_URI,
+                "انتخاب صدای هشدار بسیار شدید",
+                VERY_SEVERE_SOUND_REQUEST
+            )
         }
 
         refreshButton.setOnClickListener {
@@ -334,10 +367,16 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
         severeAlertSwitch =
             findViewById(R.id.severeAlertSwitch)
+
+        verySevereAlertSwitch =
+            findViewById(R.id.verySevereAlertSwitch)
     }
 
-    private fun openSoundPicker() {
-
+    private fun openSoundPicker(
+        preferenceKey: String,
+        title: String,
+        requestCode: Int
+    ) {
         val prefs =
             getSharedPreferences(
                 TradeMonitoringService.PREFS,
@@ -346,9 +385,20 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
         val current =
             prefs.getString(
-                TradeMonitoringService.KEY_SOUND_URI,
+                preferenceKey,
                 null
             )?.let(Uri::parse)
+                ?: if (
+                    preferenceKey ==
+                    TradeMonitoringService.KEY_SEVERE_SOUND_URI
+                ) {
+                    prefs.getString(
+                        TradeMonitoringService.KEY_SOUND_URI,
+                        null
+                    )?.let(Uri::parse)
+                } else {
+                    null
+                }
 
         startActivityForResult(
             Intent(
@@ -358,22 +408,18 @@ class TradeMonitoringActivity : AppCompatActivity() {
                     RingtoneManager.EXTRA_RINGTONE_TYPE,
                     RingtoneManager.TYPE_NOTIFICATION
                 )
-
                 putExtra(
                     RingtoneManager.EXTRA_RINGTONE_TITLE,
-                    "انتخاب صدای هشدار مانیتورینگ"
+                    title
                 )
-
                 putExtra(
                     RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT,
                     true
                 )
-
                 putExtra(
                     RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,
                     false
                 )
-
                 if (current != null) {
                     putExtra(
                         RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
@@ -381,7 +427,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
                     )
                 }
             },
-            SOUND_REQUEST
+            requestCode
         )
     }
 
@@ -398,8 +444,11 @@ class TradeMonitoringActivity : AppCompatActivity() {
         )
 
         if (
-            requestCode != SOUND_REQUEST ||
-            resultCode != RESULT_OK
+            resultCode != RESULT_OK ||
+            (
+                requestCode != SOUND_REQUEST &&
+                    requestCode != VERY_SEVERE_SOUND_REQUEST
+                )
         ) {
             return
         }
@@ -409,21 +458,50 @@ class TradeMonitoringActivity : AppCompatActivity() {
                 RingtoneManager.EXTRA_RINGTONE_PICKED_URI
             ) ?: return
 
-        getSharedPreferences(
-            TradeMonitoringService.PREFS,
-            MODE_PRIVATE
-        )
-            .edit()
+        val isVerySevere =
+            requestCode == VERY_SEVERE_SOUND_REQUEST
+
+        val key =
+            if (isVerySevere) {
+                TradeMonitoringService.KEY_VERY_SEVERE_SOUND_URI
+            } else {
+                TradeMonitoringService.KEY_SEVERE_SOUND_URI
+            }
+
+        val prefs =
+            getSharedPreferences(
+                TradeMonitoringService.PREFS,
+                MODE_PRIVATE
+            )
+
+        prefs.edit()
             .putString(
-                TradeMonitoringService.KEY_SOUND_URI,
+                key,
                 uri.toString()
             )
             .apply()
 
+        if (!isVerySevere) {
+            prefs.edit()
+                .putString(
+                    TradeMonitoringService.KEY_SOUND_URI,
+                    uri.toString()
+                )
+                .apply()
+        }
+
         findViewById<Button>(
-            R.id.tradeAlertSoundButton
+            if (isVerySevere) {
+                R.id.verySevereAlertSoundButton
+            } else {
+                R.id.tradeAlertSoundButton
+            }
         ).text =
-            "🔊 صدای هشدار مانیتورینگ انتخاب شد"
+            if (isVerySevere) {
+                "🔊 صدای هشدار بسیار شدید انتخاب شد"
+            } else {
+                "🔊 صدای هشدار شدید انتخاب شد"
+            }
     }
 
     private fun refreshOnce() {
