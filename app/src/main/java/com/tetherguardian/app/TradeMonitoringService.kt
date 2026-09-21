@@ -28,6 +28,9 @@ class TradeMonitoringService : Service() {
     companion object {
         const val PREFS = "trade_monitoring_prefs"
         const val KEY_SEVERE_ALERT = "severe_alert_enabled"
+        const val KEY_VERY_SEVERE_ALERT = "very_severe_alert_enabled"
+        const val KEY_SEVERE_SOUND_URI = "severe_alert_sound_uri"
+        const val KEY_VERY_SEVERE_SOUND_URI = "very_severe_alert_sound_uri"
         const val KEY_ACTIVE = "trade_monitoring_active"
         const val KEY_SOUND_URI = "trade_monitoring_sound_uri"
         const val KEY_LAST_SCORE = "last_score"
@@ -49,6 +52,9 @@ class TradeMonitoringService : Service() {
         const val EXTRA_TRADE_COUNT = "trade_count"
         const val EXTRA_COUNT_1000 = "count_1000"
         const val EXTRA_REASON = "reason"
+        const val EXTRA_ALERT_TYPE = "alert_type"
+        const val ALERT_TYPE_SEVERE = "severe"
+        const val ALERT_TYPE_VERY_SEVERE = "very_severe"
 
         const val ALERT_NOTIFICATION_ID = 4202
         private const val CHANNEL_ID = "trade_monitoring_channel"
@@ -68,6 +74,7 @@ class TradeMonitoringService : Service() {
      * با پایان نمایش هشدار، اجازه نمایش مجدد وجود دارد.
      */
     private var severeAlreadyShown = false
+    private var verySevereAlreadyShown = false
 
     private data class Trade(
         val time: Long,
@@ -671,6 +678,7 @@ class TradeMonitoringService : Service() {
                 putExtra(EXTRA_SELL_PRESSURE, sellPct)
                 putExtra(EXTRA_TRADE_COUNT, count)
                 putExtra(EXTRA_COUNT_1000, count1000)
+                putExtra(EXTRA_ALERT_TYPE, ALERT_TYPE_SEVERE)
             }
 
         val pendingIntent =
