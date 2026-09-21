@@ -13,6 +13,11 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class TradeMonitoringAlertActivity : AppCompatActivity() {
+    private val alertType: String
+        get() =
+            intent.getStringExtra(
+                TradeMonitoringService.EXTRA_ALERT_TYPE
+            ) ?: TradeMonitoringService.ALERT_TYPE_SEVERE
     private val handler = Handler(Looper.getMainLooper())
     private var acknowledged = false
     private var alertPlayer: MediaPlayer? = null
@@ -54,9 +59,41 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
     }
 
     private fun playSelectedSound() {
-        val prefs = getSharedPreferences(TradeMonitoringService.PREFS, MODE_PRIVATE)
-        val uri = prefs.getString(TradeMonitoringService.KEY_SOUND_URI, null)?.let(Uri::parse)
-            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+        val prefs =
+            getSharedPreferences(
+                TradeMonitoringService.PREFS,
+                MODE_PRIVATE
+            )
+
+        val selectedKey =
+            if (
+                alertType ==
+                TradeMonitoringService.ALERT_TYPE_VERY_SEVERE
+            ) {
+                TradeMonitoringService.KEY_VERY_SEVERE_SOUND_URI
+            } else {
+                TradeMonitoringService.KEY_SEVERE_SOUND_URI
+            }
+
+        val uri =
+            prefs.getString(
+                selectedKey,
+                null
+            )?.let(Uri::parse)
+                ?: if (
+                    alertType ==
+                    TradeMonitoringService.ALERT_TYPE_SEVERE
+                ) {
+                    prefs.getString(
+                        TradeMonitoringService.KEY_SOUND_URI,
+                        null
+                    )?.let(Uri::parse)
+                } else {
+                    null
+                }
+                ?: android.media.RingtoneManager.getDefaultUri(
+                    android.media.RingtoneManager.TYPE_NOTIFICATION
+                )
         runCatching {
             val player = MediaPlayer.create(applicationContext, uri) ?: return
             player.setAudioAttributes(AudioAttributes.Builder()
