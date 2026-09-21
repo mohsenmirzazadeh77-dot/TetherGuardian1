@@ -55,6 +55,7 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private lateinit var supportBlockText: TextView
     private lateinit var resistanceBlockText: TextView
     private lateinit var recalculateBlocksButton: Button
+    private lateinit var orderBookDiagnosticText: TextView
 
     private val client = OkHttpClient()
     private var refreshJob: Job? = null
@@ -119,7 +120,9 @@ class TradeMonitoringActivity : AppCompatActivity() {
                     intent.getDoubleExtra(TradeMonitoringService.EXTRA_SUPPORT_BLOCK_PRICE, -1.0),
                     intent.getDoubleExtra(TradeMonitoringService.EXTRA_SUPPORT_BLOCK_VOLUME, -1.0),
                     intent.getDoubleExtra(TradeMonitoringService.EXTRA_RESISTANCE_BLOCK_PRICE, -1.0),
-                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_RESISTANCE_BLOCK_VOLUME, -1.0)
+                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_RESISTANCE_BLOCK_VOLUME, -1.0),
+                    intent.getStringExtra(TradeMonitoringService.EXTRA_ORDERBOOK_DIAGNOSTIC)
+                        ?: "وضعیت اردربوک: نامشخص"
                 )
             }
         }
@@ -316,7 +319,11 @@ class TradeMonitoringActivity : AppCompatActivity() {
             prefs.getString(
                 TradeMonitoringService.KEY_LAST_RESISTANCE_BLOCK_VOLUME,
                 null
-            )?.toDoubleOrNull() ?: -1.0
+            )?.toDoubleOrNull() ?: -1.0,
+            prefs.getString(
+                TradeMonitoringService.KEY_LAST_ORDERBOOK_DIAGNOSTIC,
+                "وضعیت اردربوک: نامشخص"
+            ) ?: "وضعیت اردربوک: نامشخص"
         )
     }
 
@@ -330,7 +337,8 @@ class TradeMonitoringActivity : AppCompatActivity() {
         supportPrice: Double,
         supportVolume: Double,
         resistancePrice: Double,
-        resistanceVolume: Double
+        resistanceVolume: Double,
+        orderBookDiagnostic: String
     ) {
         statusText.text =
             when {
@@ -362,6 +370,8 @@ class TradeMonitoringActivity : AppCompatActivity() {
             } else {
                 "بلوک حمایتی: یافت نشد"
             }
+
+        orderBookDiagnosticText.text = orderBookDiagnostic
 
         resistanceBlockText.text =
             if (resistancePrice > 0.0 && resistanceVolume >= 0.0) {
@@ -433,6 +443,9 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
         recalculateBlocksButton =
             findViewById(R.id.recalculateBlocksButton)
+
+        orderBookDiagnosticText =
+            findViewById(R.id.orderBookDiagnosticText)
     }
 
     private fun openSoundPicker(
