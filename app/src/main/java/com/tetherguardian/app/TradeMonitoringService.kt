@@ -773,7 +773,7 @@ class TradeMonitoringService : Service() {
 
     private fun fetchOrderBook(): OrderBook? {
         val request = Request.Builder()
-            .url("https://api.nobitex.ir/v3/orderbook/USDTIRT")
+            .url("https://apiv2.nobitex.ir/v3/orderbook/USDTIRT")
             .build()
 
         return runCatching {
