@@ -74,7 +74,6 @@ class TradeMonitoringService : Service() {
      * با پایان نمایش هشدار، اجازه نمایش مجدد وجود دارد.
      */
     private var severeAlreadyShown = false
-    private var verySevereAlreadyShown = false
 
     private data class Trade(
         val time: Long,
