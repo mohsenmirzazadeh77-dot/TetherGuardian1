@@ -69,11 +69,6 @@ class TradeMonitoringService : Service() {
      */
     private var severeAlreadyShown = false
 
-    // حداقل فاصله بین دو هشدار شدید مستقل.
-    // هدف: هشدار فقط برای رخدادهای واقعاً نادر و غیرعادی باشد.
-    private var lastSevereAlertAt = 0L
-    private val severeAlertCooldownMs = 15 * 60 * 1000L
-
     private data class Trade(
         val time: Long,
         val price: Double,
@@ -519,6 +514,9 @@ class TradeMonitoringService : Service() {
              * شرط دوم:
              * چند معامله غیرعادی هم‌جهت + فشار جهت‌دار قابل توجه
              *
+             * شرط نهایی نمایش هشدار:
+             * امتیاز بیش از ۸۰ و حداقل ۵ معامله با حجم ۱۰۰۰ تتر یا بیشتر
+             *
              * این باعث می‌شود یک معامله بزرگ به تنهایی هشدار شدید نسازد.
              * ---------------------------------------------------------
              */
@@ -617,22 +615,17 @@ class TradeMonitoringService : Service() {
              * فعال بودن هشدار شدید + وجود وضعیت شدید +
              * پایان نیافتن چرخه قبلی.
              */
-            val nowForAlert = System.currentTimeMillis()
-            val cooldownPassed =
-                nowForAlert - lastSevereAlertAt >= severeAlertCooldownMs
-
             if (
                 prefs.getBoolean(
                     KEY_SEVERE_ALERT,
                     true
                 ) &&
                 severeCondition &&
-                scoreInt >= 85 &&
-                cooldownPassed &&
+                scoreInt > 80 &&
+                largeCount >= 5 &&
                 !severeAlreadyShown
             ) {
                 severeAlreadyShown = true
-                lastSevereAlertAt = nowForAlert
 
                 showSevereAlert(
                     scoreInt,
