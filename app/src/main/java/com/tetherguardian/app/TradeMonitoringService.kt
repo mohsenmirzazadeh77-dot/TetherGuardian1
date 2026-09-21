@@ -675,6 +675,7 @@ class TradeMonitoringService : Service() {
                 !verySevereAlreadyShown
             ) {
                 verySevereAlreadyShown = true
+                severeAlreadyShown = true
                 verySevereShownNow = true
 
                 showVerySevereAlert(
