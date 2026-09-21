@@ -52,6 +52,9 @@ class TradeMonitoringActivity : AppCompatActivity() {
     private lateinit var refreshButton: Button
     private lateinit var severeAlertSwitch: Switch
     private lateinit var verySevereAlertSwitch: Switch
+    private lateinit var supportBlockText: TextView
+    private lateinit var resistanceBlockText: TextView
+    private lateinit var recalculateBlocksButton: Button
 
     private val client = OkHttpClient()
     private var refreshJob: Job? = null
@@ -112,7 +115,11 @@ class TradeMonitoringActivity : AppCompatActivity() {
                     ),
                     intent.getStringExtra(
                         TradeMonitoringService.EXTRA_REASON
-                    ) ?: ""
+                    ) ?: "",
+                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_SUPPORT_BLOCK_PRICE, -1.0),
+                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_SUPPORT_BLOCK_VOLUME, -1.0),
+                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_RESISTANCE_BLOCK_PRICE, -1.0),
+                    intent.getDoubleExtra(TradeMonitoringService.EXTRA_RESISTANCE_BLOCK_VOLUME, -1.0)
                 )
             }
         }
@@ -207,6 +214,17 @@ class TradeMonitoringActivity : AppCompatActivity() {
             refreshOnce()
         }
 
+        recalculateBlocksButton.setOnClickListener {
+            startService(
+                Intent(
+                    this,
+                    TradeMonitoringService::class.java
+                ).apply {
+                    action = TradeMonitoringService.ACTION_RECALCULATE_BLOCKS
+                }
+            )
+        }
+
         loadLastStatus()
 
         refreshJob =
@@ -282,7 +300,23 @@ class TradeMonitoringActivity : AppCompatActivity() {
             prefs.getString(
                 TradeMonitoringService.KEY_LAST_REASON,
                 ""
-            ) ?: ""
+            ) ?: "",
+            prefs.getString(
+                TradeMonitoringService.KEY_LAST_SUPPORT_BLOCK_PRICE,
+                null
+            )?.toDoubleOrNull() ?: -1.0,
+            prefs.getString(
+                TradeMonitoringService.KEY_LAST_SUPPORT_BLOCK_VOLUME,
+                null
+            )?.toDoubleOrNull() ?: -1.0,
+            prefs.getString(
+                TradeMonitoringService.KEY_LAST_RESISTANCE_BLOCK_PRICE,
+                null
+            )?.toDoubleOrNull() ?: -1.0,
+            prefs.getString(
+                TradeMonitoringService.KEY_LAST_RESISTANCE_BLOCK_VOLUME,
+                null
+            )?.toDoubleOrNull() ?: -1.0
         )
     }
 
@@ -292,7 +326,11 @@ class TradeMonitoringActivity : AppCompatActivity() {
         sellPct: Double,
         count: Int,
         count1000: Int,
-        reason: String
+        reason: String,
+        supportPrice: Double,
+        supportVolume: Double,
+        resistancePrice: Double,
+        resistanceVolume: Double
     ) {
         statusText.text =
             when {
@@ -316,6 +354,22 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
         largeCountText.text =
             "تعداد معاملات ۵ دقیقه اخیر ≥ ۱۰۰۰ تتر: $count1000"
+
+        supportBlockText.text =
+            if (supportPrice > 0.0 && supportVolume >= 0.0) {
+                "بلوک حمایتی: " + priceFormat.format(supportPrice / 10.0) +
+                    " تومان — حجم لحظه‌ای: " + volumeFormat.format(supportVolume) + " تتر"
+            } else {
+                "بلوک حمایتی: یافت نشد"
+            }
+
+        resistanceBlockText.text =
+            if (resistancePrice > 0.0 && resistanceVolume >= 0.0) {
+                "بلوک مقاومتی: " + priceFormat.format(resistancePrice / 10.0) +
+                    " تومان — حجم لحظه‌ای: " + volumeFormat.format(resistanceVolume) + " تتر"
+            } else {
+                "بلوک مقاومتی: یافت نشد"
+            }
 
         if (reason.isNotBlank()) {
             reasonText.text = reason
@@ -370,6 +424,15 @@ class TradeMonitoringActivity : AppCompatActivity() {
 
         verySevereAlertSwitch =
             findViewById(R.id.verySevereAlertSwitch)
+
+        supportBlockText =
+            findViewById(R.id.supportBlockText)
+
+        resistanceBlockText =
+            findViewById(R.id.resistanceBlockText)
+
+        recalculateBlocksButton =
+            findViewById(R.id.recalculateBlocksButton)
     }
 
     private fun openSoundPicker(
