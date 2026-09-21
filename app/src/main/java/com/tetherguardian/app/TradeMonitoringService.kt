@@ -43,6 +43,7 @@ class TradeMonitoringService : Service() {
         const val KEY_LAST_SUPPORT_BLOCK_VOLUME = "last_support_block_volume"
         const val KEY_LAST_RESISTANCE_BLOCK_PRICE = "last_resistance_block_price"
         const val KEY_LAST_RESISTANCE_BLOCK_VOLUME = "last_resistance_block_volume"
+        const val KEY_LAST_ORDERBOOK_DIAGNOSTIC = "last_orderbook_diagnostic"
 
         const val ACTION_START = "com.tetherguardian.app.action.TRADE_MONITOR_START"
         const val ACTION_STOP = "com.tetherguardian.app.action.TRADE_MONITOR_STOP"
@@ -64,6 +65,7 @@ class TradeMonitoringService : Service() {
         const val EXTRA_SUPPORT_BLOCK_VOLUME = "support_block_volume"
         const val EXTRA_RESISTANCE_BLOCK_PRICE = "resistance_block_price"
         const val EXTRA_RESISTANCE_BLOCK_VOLUME = "resistance_block_volume"
+        const val EXTRA_ORDERBOOK_DIAGNOSTIC = "orderbook_diagnostic"
         const val ALERT_TYPE_SEVERE = "severe"
         const val ALERT_TYPE_VERY_SEVERE = "very_severe"
 
@@ -243,6 +245,7 @@ class TradeMonitoringService : Service() {
             lastLiveTradePrice = currentLivePrice
 
             val orderBook = fetchOrderBook()
+            val orderBookDiagnostic = buildOrderBookDiagnostic(orderBook, currentLivePrice)
             val blockCollapse =
                 orderBook?.let {
                     updateOrderBlocks(
@@ -681,6 +684,8 @@ class TradeMonitoringService : Service() {
                     "${window.size} معامله • ≥۱۰۰۰ تتر: $largeCount"
             )
 
+            saveOrderBookDiagnostic(orderBookDiagnostic)
+
             sendStatus(
                 scoreInt,
                 buyPct,
@@ -691,7 +696,8 @@ class TradeMonitoringService : Service() {
                 supportBlock?.price,
                 supportVolume,
                 resistanceBlock?.price,
-                resistanceVolume
+                resistanceVolume,
+                orderBookDiagnostic
             )
 
             val prefs =
@@ -1065,7 +1071,8 @@ class TradeMonitoringService : Service() {
         supportPrice: Double?,
         supportVolume: Double?,
         resistancePrice: Double?,
-        resistanceVolume: Double?
+        resistanceVolume: Double?,
+        orderBookDiagnostic: String
     ) {
         sendBroadcast(
             Intent(ACTION_STATUS_UPDATE).apply {
@@ -1080,6 +1087,7 @@ class TradeMonitoringService : Service() {
                 if (supportVolume != null) putExtra(EXTRA_SUPPORT_BLOCK_VOLUME, supportVolume)
                 if (resistancePrice != null) putExtra(EXTRA_RESISTANCE_BLOCK_PRICE, resistancePrice)
                 if (resistanceVolume != null) putExtra(EXTRA_RESISTANCE_BLOCK_VOLUME, resistanceVolume)
+                putExtra(EXTRA_ORDERBOOK_DIAGNOSTIC, orderBookDiagnostic)
             }
         )
     }
@@ -1102,9 +1110,55 @@ class TradeMonitoringService : Service() {
         }.apply()
     }
 
+    private fun saveOrderBookDiagnostic(
+        diagnostic: String
+    ) {
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_ORDERBOOK_DIAGNOSTIC, diagnostic)
+            .apply()
+    }
+
+    private fun buildOrderBookDiagnostic(
+        orderBook: OrderBook?,
+        basePrice: Double
+    ): String {
+        if (orderBook == null) {
+            return "وضعیت اردربوک: دریافت نشد"
+        }
+
+        fun aggregated(levels: List<OrderBookLevel>): List<Pair<Double, Double>> =
+            levels
+                .groupBy { it.price }
+                .map { (price, rows) ->
+                    price to rows.sumOf { it.volume }
+                }
+
+        val asks = aggregated(orderBook.asks)
+            .filter { it.first > basePrice }
+
+        val bids = aggregated(orderBook.bids)
+            .filter { it.first < basePrice }
+
+        val maxAsk = asks.maxOfOrNull { it.second } ?: 0.0
+        val maxBid = bids.maxOfOrNull { it.second } ?: 0.0
+
+        val askBlocks = asks.count { it.second > 20_000.0 }
+        val bidBlocks = bids.count { it.second > 20_000.0 }
+
+        return "وضعیت اردربوک: دریافت شد | فروش بالای مبنا: ${asks.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxAsk)} تتر، بلوک بالای ۲۰٬۰۰۰: $askBlocks | خرید پایین مبنا: ${bids.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxBid)} تتر، بلوک بالای ۲۰٬۰۰۰: $bidBlocks"
+    }
+
+    private fun volumeFormatForDiagnostic(
+        value: Double
+    ): String =
+        String.format(Locale.US, "%,.2f", value)
+
     private fun recalculateOrderBlocks() {
         val currentPrice = lastLiveTradePrice ?: return
         val orderBook = fetchOrderBook() ?: return
+
+        saveOrderBookDiagnostic(buildOrderBookDiagnostic(orderBook, currentPrice))
 
         orderBlockBasePrice = currentPrice
         resistanceBlock = findFirstBlock(orderBook.asks, currentPrice, true)
@@ -1132,7 +1186,10 @@ class TradeMonitoringService : Service() {
             supportBlock?.price,
             supportVolume,
             resistanceBlock?.price,
-            resistanceVolume
+            resistanceVolume,
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(KEY_LAST_ORDERBOOK_DIAGNOSTIC, "وضعیت اردربوک: نامشخص")
+                ?: "وضعیت اردربوک: نامشخص"
         )
     }
 
