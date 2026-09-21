@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
@@ -39,6 +40,50 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         setContentView(R.layout.trade_monitoring_alert)
+
+        val isVerySevere =
+            alertType == TradeMonitoringService.ALERT_TYPE_VERY_SEVERE
+
+        val blockText =
+            findViewById<TextView>(R.id.tradeAlertBlockText)
+
+        val alertTitle =
+            findViewById<TextView>(R.id.tradeAlertTitle)
+
+        if (isVerySevere) {
+            val blockSide =
+                intent.getStringExtra(
+                    TradeMonitoringService.EXTRA_BLOCK_TYPE
+                ) ?: "support"
+
+            val blockType =
+                if (blockSide == "support") "حمایتی" else "مقاومتی"
+
+            val direction =
+                if (blockSide == "support") "کاهش قیمت" else "افزایش قیمت"
+
+            val blockPrice =
+                intent.getDoubleExtra(
+                    TradeMonitoringService.EXTRA_BLOCK_PRICE,
+                    0.0
+                )
+
+            val blockPriceToman =
+                (blockPrice / 10.0).toLong()
+
+            alertTitle.text =
+                "⚠ هشدار بسیار شدید $direction به دلیل فروپاشی بلوک " +
+                    "$blockType $blockPriceToman تومانی"
+
+            blockText.visibility = View.VISIBLE
+            blockText.text =
+                "فروپاشی بلوک $blockType: $blockPriceToman تومان"
+        } else {
+            alertTitle.text =
+                "⚠ هشدار شدید مانیتورینگ معاملات"
+            blockText.visibility = View.GONE
+        }
+
         findViewById<TextView>(R.id.tradeAlertScoreText).text = "امتیاز هشدار: ${intent.getIntExtra("score", 0)}/100"
         findViewById<TextView>(R.id.tradeAlertReasonText).text = intent.getStringExtra("reason") ?: "رفتار غیرعادی معاملات شناسایی شد"
         findViewById<TextView>(R.id.tradeAlertCountText).text = "تعداد معاملات ۵ دقیقه اخیر: ${intent.getIntExtra("trade_count", 0)}"
