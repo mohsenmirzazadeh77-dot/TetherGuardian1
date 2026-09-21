@@ -69,6 +69,11 @@ class TradeMonitoringService : Service() {
      */
     private var severeAlreadyShown = false
 
+    // حداقل فاصله بین دو هشدار شدید مستقل.
+    // هدف: هشدار فقط برای رخدادهای واقعاً نادر و غیرعادی باشد.
+    private var lastSevereAlertAt = 0L
+    private val severeAlertCooldownMs = 15 * 60 * 1000L
+
     private data class Trade(
         val time: Long,
         val price: Double,
@@ -519,18 +524,21 @@ class TradeMonitoringService : Service() {
              */
 
             val strongDirection =
-                directionalStrength >= 18.0
+                directionalStrength >= 22.0
 
+            // برای هشدار شدید، افزایش سرعت و حجم باید هر دو
+            // به‌طور محسوسی رخ داده باشند؛ یکی به تنهایی کافی نیست.
             val strongAcceleration =
-                countAcceleration >= 1.8 ||
-                    volumeAcceleration >= 1.8
+                countAcceleration >= 2.0 &&
+                    volumeAcceleration >= 2.0
 
+            // معاملات غیرعادی باید هم متعدد و هم به‌طور واضح هم‌جهت باشند.
             val unusualSameDirection =
-                unusualTrades.size >= 2 &&
-                    unusualDirectionalStrength >= 0.60
+                unusualTrades.size >= 3 &&
+                    unusualDirectionalStrength >= 0.75
 
             val severeCondition =
-                recentCount >= 4 &&
+                recentCount >= 5 &&
                     (
                         (
                             strongDirection &&
@@ -609,15 +617,22 @@ class TradeMonitoringService : Service() {
              * فعال بودن هشدار شدید + وجود وضعیت شدید +
              * پایان نیافتن چرخه قبلی.
              */
+            val nowForAlert = System.currentTimeMillis()
+            val cooldownPassed =
+                nowForAlert - lastSevereAlertAt >= severeAlertCooldownMs
+
             if (
                 prefs.getBoolean(
                     KEY_SEVERE_ALERT,
                     true
                 ) &&
                 severeCondition &&
+                scoreInt >= 85 &&
+                cooldownPassed &&
                 !severeAlreadyShown
             ) {
                 severeAlreadyShown = true
+                lastSevereAlertAt = nowForAlert
 
                 showSevereAlert(
                     scoreInt,
@@ -633,7 +648,7 @@ class TradeMonitoringService : Service() {
              * اگر وضعیت شدید کاملاً فروکش کرد،
              * چرخه برای رویداد بعدی آماده می‌شود.
              */
-            if (scoreInt < 60) {
+            if (scoreInt < 50) {
                 severeAlreadyShown = false
             }
         }
