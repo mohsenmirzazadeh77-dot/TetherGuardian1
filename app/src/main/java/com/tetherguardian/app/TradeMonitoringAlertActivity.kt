@@ -99,8 +99,12 @@ class TradeMonitoringAlertActivity : AppCompatActivity() {
             finish()
         }
         playSelectedSound()
-        handler.postDelayed(stopSoundRunnable, 10_000)
-        handler.postDelayed(endDisplay, 10_000)
+
+        val displayDuration =
+            if (isVerySevere) 20_000L else 10_000L
+
+        handler.postDelayed(stopSoundRunnable, displayDuration)
+        handler.postDelayed(endDisplay, displayDuration)
     }
 
     private fun playSelectedSound() {
