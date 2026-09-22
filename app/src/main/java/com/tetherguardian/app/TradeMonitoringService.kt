@@ -497,6 +497,52 @@ class TradeMonitoringService : Service() {
 
             /*
              * ---------------------------------------------------------
+             * ۵-b) معاملات بزرگ هم‌جهت
+             *
+             * معاملات >= ۱۰۰۰ تتر باید اثر مستقیم و قابل توجهی
+             * روی امتیاز داشته باشند، مخصوصاً وقتی چند معامله بزرگ
+             * در یک جهت ظاهر شوند.
+             * ---------------------------------------------------------
+             */
+            val largeTrades = recent.filter { it.volume >= 1000.0 }
+
+            val largeBuyVolume = largeTrades
+                .filter { it.type.equals("buy", true) }
+                .sumOf { it.volume }
+
+            val largeSellVolume = largeTrades
+                .filter { it.type.equals("sell", true) }
+                .sumOf { it.volume }
+
+            val largeTotalVolume = largeBuyVolume + largeSellVolume
+
+            val largeDirectionalStrength =
+                if (largeTotalVolume > 0.0) {
+                    abs(largeBuyVolume - largeSellVolume) / largeTotalVolume
+                } else {
+                    0.0
+                }
+
+            val largeDirectionScore =
+                min(15.0, largeDirectionalStrength * 15.0)
+
+            val largeSizeScore =
+                min(
+                    15.0,
+                    largeTrades.sumOf {
+                        min(4.0, it.volume / 1000.0) * 2.5
+                    }
+                )
+
+            val alignedLargeTradeScore =
+                if (largeTrades.isNotEmpty()) {
+                    largeDirectionScore + largeSizeScore
+                } else {
+                    0.0
+                }
+
+            /*
+             * ---------------------------------------------------------
              * ۶) حرکت قیمت فقط نقش تأییدکننده دارد.
              * ---------------------------------------------------------
              */
@@ -562,6 +608,7 @@ class TradeMonitoringService : Service() {
                         countAccelerationScore +
                         volumeAccelerationScore +
                         unusualDirectionScore +
+                        alignedLargeTradeScore +
                         priceConfirmationScore +
                         persistenceScore
                     )
@@ -602,6 +649,10 @@ class TradeMonitoringService : Service() {
                 unusualTrades.size >= 3 &&
                     unusualDirectionalStrength >= 0.75
 
+            val alignedLargeTrades =
+                largeTrades.size >= 2 &&
+                    largeDirectionalStrength >= 0.65
+
             val severeCondition =
                 recentCount >= 5 &&
                     (
@@ -609,7 +660,8 @@ class TradeMonitoringService : Service() {
                             strongDirection &&
                                 strongAcceleration
                             ) ||
-                            unusualSameDirection
+                            unusualSameDirection ||
+                            alignedLargeTrades
                         )
 
             val reason =
@@ -706,12 +758,15 @@ class TradeMonitoringService : Service() {
 
             val severeDisplayCondition =
                 severeCondition &&
-                    scoreInt > 80 &&
-                    largeCount >= 5
+                    scoreInt >= 70
 
+            /*
+             * هشدار بسیار شدید مستقل از امتیاز هشدار شدید است.
+             * اگر فروپاشی بلوک طبق منطق اختصاصی بلوک تشخیص داده شود،
+             * همان رویداد به‌تنهایی مجوز هشدار بسیار شدید است.
+             */
             val verySevereCondition =
-                severeDisplayCondition &&
-                    blockCollapse != null
+                blockCollapse != null
 
             var verySevereShownNow = false
 
@@ -898,7 +953,7 @@ class TradeMonitoringService : Service() {
                 .map { (price, rows) ->
                     price to rows.sumOf { it.volume }
                 }
-                .filter { it.second > 20_000.0 }
+                .filter { it.second >= 10_000.0 }
                 .sortedWith(
                     if (above) {
                         compareBy { it.first }
@@ -1144,10 +1199,10 @@ class TradeMonitoringService : Service() {
         val maxAsk = asks.maxOfOrNull { it.second } ?: 0.0
         val maxBid = bids.maxOfOrNull { it.second } ?: 0.0
 
-        val askBlocks = asks.count { it.second > 20_000.0 }
-        val bidBlocks = bids.count { it.second > 20_000.0 }
+        val askBlocks = asks.count { it.second >= 10_000.0 }
+        val bidBlocks = bids.count { it.second >= 10_000.0 }
 
-        return "وضعیت اردربوک: دریافت شد | فروش بالای مبنا: ${asks.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxAsk)} تتر، بلوک بالای ۲۰٬۰۰۰: $askBlocks | خرید پایین مبنا: ${bids.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxBid)} تتر، بلوک بالای ۲۰٬۰۰۰: $bidBlocks"
+        return "وضعیت اردربوک: دریافت شد | فروش بالای مبنا: ${asks.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxAsk)} تتر، بلوک بالای ۱۰٬۰۰۰: $askBlocks | خرید پایین مبنا: ${bids.size} سطح، بیشترین حجم تجمیعی: ${volumeFormatForDiagnostic(maxBid)} تتر، بلوک بالای ۱۰٬۰۰۰: $bidBlocks"
     }
 
     private fun volumeFormatForDiagnostic(
