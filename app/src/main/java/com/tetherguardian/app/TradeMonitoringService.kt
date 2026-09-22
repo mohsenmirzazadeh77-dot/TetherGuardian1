@@ -89,6 +89,8 @@ class TradeMonitoringService : Service() {
      */
     private var severeAlreadyShown = false
     private var verySevereAlreadyShown = false
+    // هر اعلان یک نسل دارد تا زمان‌بندی بستن اعلان قبلی، اعلان جدید را نبندد.
+    private var alertNotificationGeneration = 0
 
     private data class OrderBookLevel(
         val price: Double,
@@ -883,8 +885,6 @@ class TradeMonitoringService : Service() {
             return null
         }
 
-        val previousPrice = previousOrderBookPrice
-
         resistanceBlock?.let { block ->
             val currentVolume = volumeAtPrice(asks, block.price)
 
@@ -917,21 +917,47 @@ class TradeMonitoringService : Service() {
             }
         }
 
-        val newResistance = findFirstBlock(asks, base, true)
-        val newSupport = findFirstBlock(bids, base, false)
+        /*
+         * آستانه ۱۰٬۰۰۰ فقط برای کشف بلوک جدید است.
+         * بلوکی که قبلاً ثبت شده، حتی اگر حجم فعلی آن به زیر ۱۰٬۰۰۰
+         * برسد، تا زمان فروپاشی کامل یا تشکیل بلوک نزدیک‌تر معتبر می‌ماند.
+         *
+         * حجم فعلی بلوک نیز هویت آن را تغییر نمی‌دهد؛ بنابراین افزایش
+         * یا کاهش حجم به خودی خود باعث جایگزینی بلوک نمی‌شود.
+         */
+        val newResistance = findFirstBlock(asks, currentPrice, true)
+        val newSupport = findFirstBlock(bids, currentPrice, false)
 
-        if (
-            resistanceBlock == null ||
-            newResistance?.price != resistanceBlock?.price
-        ) {
+        if (resistanceBlock == null) {
             resistanceBlock = newResistance
+        } else if (
+            newResistance != null &&
+            newResistance.price != resistanceBlock?.price
+        ) {
+            val oldDistance =
+                abs(resistanceBlock!!.price - currentPrice)
+            val newDistance =
+                abs(newResistance.price - currentPrice)
+
+            if (newDistance < oldDistance) {
+                resistanceBlock = newResistance
+            }
         }
 
-        if (
-            supportBlock == null ||
-            newSupport?.price != supportBlock?.price
-        ) {
+        if (supportBlock == null) {
             supportBlock = newSupport
+        } else if (
+            newSupport != null &&
+            newSupport.price != supportBlock?.price
+        ) {
+            val oldDistance =
+                abs(supportBlock!!.price - currentPrice)
+            val newDistance =
+                abs(newSupport.price - currentPrice)
+
+            if (newDistance < oldDistance) {
+                supportBlock = newSupport
+            }
         }
 
         previousOrderBookPrice = currentPrice
@@ -1042,6 +1068,7 @@ class TradeMonitoringService : Service() {
 
         getSystemService(NotificationManager::class.java)
             .notify(ALERT_NOTIFICATION_ID, notification)
+        scheduleAlertNotificationCancel(20_000L)
     }
 
     private fun showSevereAlert(
@@ -1114,6 +1141,20 @@ class TradeMonitoringService : Service() {
             ALERT_NOTIFICATION_ID,
             notification
         )
+        scheduleAlertNotificationCancel(10_000L)
+    }
+
+    private fun scheduleAlertNotificationCancel(delayMillis: Long) {
+        val generation = ++alertNotificationGeneration
+
+        scope.launch {
+            delay(delayMillis)
+
+            if (generation == alertNotificationGeneration) {
+                getSystemService(NotificationManager::class.java)
+                    .cancel(ALERT_NOTIFICATION_ID)
+            }
+        }
     }
 
     private fun sendStatus(
