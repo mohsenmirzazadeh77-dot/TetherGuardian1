@@ -1,2 +1,5 @@
-# TetherGuardian1
-Android app for real-time Tether price alerts on Nobitex
+# TetherBan
+
+**پایش ارزش تتر/تومان**
+
+Android app for real-time Tether/Toman value monitoring and alerts on Nobitex.
