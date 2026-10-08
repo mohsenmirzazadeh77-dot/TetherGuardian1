@@ -261,7 +261,7 @@ class MonitoringService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("نگهبان تتر — پایش فعال")
+            .setContentTitle("تتر بان — پایش فعال")
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
             .setContentIntent(mainPendingIntent)
