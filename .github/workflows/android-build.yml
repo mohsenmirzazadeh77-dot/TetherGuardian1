@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/monitoring-service
+      - تتر-بان
   workflow_dispatch:
 
 permissions:
