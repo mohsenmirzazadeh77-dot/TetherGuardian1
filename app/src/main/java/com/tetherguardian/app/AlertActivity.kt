@@ -23,6 +23,7 @@ class AlertActivity : AppCompatActivity() {
     private val endAlertDisplay = Runnable {
         if (!acknowledged) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            finish()
         }
     }
 
