@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">تتر بان</string>
+    <string name="app_name_latin">TetherBan</string>
+    <string name="app_description">پایش ارزش تتر/تومان</string>
+</resources>
