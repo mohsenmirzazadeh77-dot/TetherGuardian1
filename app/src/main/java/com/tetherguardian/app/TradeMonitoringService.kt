@@ -1114,7 +1114,7 @@ class TradeMonitoringService : Service() {
             )
                 .setSmallIcon(R.drawable.ic_tether_eye)
                 .setContentTitle(
-                    "نگهبان تتر • هشدار شدید معاملات"
+                    "تتر بان • هشدار شدید معاملات"
                 )
                 .setContentText(reason)
                 .setPriority(
@@ -1346,7 +1346,7 @@ class TradeMonitoringService : Service() {
         )
             .setSmallIcon(R.drawable.ic_tether_eye)
             .setContentTitle(
-                "نگهبان تتر • مانیتورینگ معاملات"
+                "تتر بان • مانیتورینگ معاملات"
             )
             .setContentText(text)
             .setOngoing(true)
