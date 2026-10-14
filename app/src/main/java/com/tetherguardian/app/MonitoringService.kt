@@ -169,8 +169,9 @@ class MonitoringService : Service() {
 
         alertAcknowledged = false
         alertJob = serviceScope.launch {
-            showAlert(alertPrice, newBase, drop)
+            // Start audio independently before posting the full-screen notification.
             startAlertSound()
+            showAlert(alertPrice, newBase, drop)
 
             delay(30_000)
 
@@ -198,7 +199,7 @@ class MonitoringService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setSmallIcon(R.drawable.ic_tether_eye)
             .setContentTitle("هشدار ریزش تتر")
             .setContentText("قیمت به حد هشدار رسیده است")
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -207,6 +208,7 @@ class MonitoringService : Service() {
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
         getSystemService(NotificationManager::class.java)
